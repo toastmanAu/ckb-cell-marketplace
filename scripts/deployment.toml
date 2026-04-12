@@ -1,0 +1,4 @@
+[[cells]]
+name = "market-item-type"
+enable_type_id = true
+location = { file = "build/market-item-type" }
