@@ -45,21 +45,24 @@ export function encodeMarketItem(
 }
 
 export function decodeMarketItem(data: Uint8Array): MarketItem {
-  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  // Ensure we have a clean copy — ccc.bytesFrom() may return a subarray
+  // whose .buffer is larger than the actual data, causing offset errors
+  const clean = data.byteOffset === 0 ? data : new Uint8Array(data);
+  const view = new DataView(clean.buffer, 0, clean.byteLength);
 
-  // Read offsets
+  // Read offsets from molecule header
   const offset0 = view.getUint32(4, true);  // content_type start
   const offset1 = view.getUint32(8, true);  // description start
   const offset2 = view.getUint32(12, true); // content start
 
   const ctLen = view.getUint32(offset0, true);
-  const ctBytes = data.subarray(offset0 + 4, offset0 + 4 + ctLen);
+  const ctBytes = clean.subarray(offset0 + 4, offset0 + 4 + ctLen);
 
   const descLen = view.getUint32(offset1, true);
-  const descBytes = data.subarray(offset1 + 4, offset1 + 4 + descLen);
+  const descBytes = clean.subarray(offset1 + 4, offset1 + 4 + descLen);
 
   const contLen = view.getUint32(offset2, true);
-  const contentBytes = data.subarray(offset2 + 4, offset2 + 4 + contLen);
+  const contentBytes = clean.subarray(offset2 + 4, offset2 + 4 + contLen);
 
   const decoder = new TextDecoder();
   return {

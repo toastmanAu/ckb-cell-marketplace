@@ -6,9 +6,48 @@ interface ContentRendererProps {
   mode: 'preview' | 'full';
 }
 
+/** Check if content bytes look like a ckbfs:// URI reference rather than raw binary */
+function isCkbfsRef(content: Uint8Array): boolean {
+  if (content.length > 200) return false; // real images are larger
+  try {
+    const text = new TextDecoder().decode(content);
+    return text.startsWith('ckbfs://');
+  } catch {
+    return false;
+  }
+}
+
 export function ContentRenderer({ item, mode }: ContentRendererProps) {
   const category = categoriseContent(item.contentType);
   const isPreview = mode === 'preview';
+
+  // Handle CKBFS references — content is a URI, not the actual file
+  if (isCkbfsRef(item.content)) {
+    const uri = new TextDecoder().decode(item.content);
+    return (
+      <div style={{
+        background: 'var(--surface2)',
+        borderRadius: '8px',
+        padding: isPreview ? '0.75rem' : '1.25rem',
+        height: isPreview ? '180px' : 'auto',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '0.5rem',
+      }}>
+        <span style={{ fontSize: '1.5rem' }}>&#x1F5C4;</span>
+        <span style={{ fontSize: '0.82rem', color: 'var(--accent)', fontFamily: "'JetBrains Mono', monospace" }}>
+          CKBFS Stored
+        </span>
+        {!isPreview && (
+          <code style={{ fontSize: '0.75rem', color: 'var(--muted)', wordBreak: 'break-all' }}>
+            {uri}
+          </code>
+        )}
+      </div>
+    );
+  }
 
   if (category === 'image') {
     const url = contentToDataUrl(item.content, item.contentType);
