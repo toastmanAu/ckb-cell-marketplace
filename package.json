@@ -1,0 +1,24 @@
+{
+  "name": "ckb-cell-marketplace",
+  "version": "1.0.0",
+  "description": "A universal, fully on-chain marketplace for any CKB cell content — art, scripts, ePubs, data files, deeds.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@ckb-ccc/core": "^1.12.5",
+    "@ckb-ccc/joy-id": "^1.0.32",
+    "@ckb-lumos/lumos": "^0.23.0",
+    "@ckbfs/api": "^2.0.19",
+    "@spore-sdk/core": "^0.1.0"
+  }
+}

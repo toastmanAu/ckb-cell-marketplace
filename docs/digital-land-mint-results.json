@@ -1,0 +1,29 @@
+{
+  "clusterId": "0xaa681dda2d5c0d6c49bf14e2990fa78477baf60d68568c4349d48e43fb3fe77f",
+  "mints": [
+    {
+      "name": "Cyber Lounge",
+      "file": "wyltek-studio_00182_.jpg",
+      "txHash": "0xe196e73d8ea5a2951e5a4057911138e763a3bd3e6e4f303cdcc855fcc516d5ce",
+      "sporeId": "0x0d3825c72b941d3931a5a16dd0df4ce9c77617cb2eb17a401847f0e1b5ffd745"
+    },
+    {
+      "name": "Node Operations",
+      "file": "wyltek-studio_00183_.jpg",
+      "txHash": "0x85a10cac33fe07ae2fe88b7bb874ad160a70d11c9e3c9adb2d730bc63e4d4e19",
+      "sporeId": "0xbb8e5c75ebf53e8d0d4a5a3ba260f92958e66bda17e6d5b3e9f9c7d89ce4dfa9"
+    },
+    {
+      "name": "The Lab",
+      "file": "wyltek-studio_00190_.jpg",
+      "txHash": "0xa2d1a2be0a2d814d9bf8bcb94d6363621ab2ea161dcc0fa32d8fc3a7195164b2",
+      "sporeId": "0x200a1cc8ad2be08158015dbd40ba07b9ddbb3b70c19235a17d7779ba25e69014"
+    },
+    {
+      "name": "Eden Valley",
+      "file": "wyltek-studio_00229_.jpg",
+      "txHash": "0x2f846aa4698872de955d212142ae54faad479c94ab9044d8f4d3001e58a5b670",
+      "sporeId": "0xa1d8774503afe7bea38ced40a7332c7c52c52c105c49db6866f99bd38eafa865"
+    }
+  ]
+}

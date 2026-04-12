@@ -2,3 +2,4 @@ target/
 build/
 *.swp
 deploy/*.json
+node_modules/
