@@ -54,7 +54,7 @@ export async function buildListTx(
   signer: ccc.Signer,
   itemOutPoint: ccc.OutPointLike,
   itemData: string,        // hex-encoded cell data (unchanged)
-  itemCapacity: bigint,
+  _itemCapacity: bigint,   // unused — CCC calculates minimum occupied capacity
   price: bigint,           // total_value in shannons
   royaltyBps: number,      // 0-10000
   expiryEpoch: bigint,     // 0 = permanent
@@ -73,6 +73,8 @@ export async function buildListTx(
     expiryEpoch,
   });
 
+  // Don't fix capacity — LSDL args are larger than the original lock args,
+  // so the occupied capacity increases. Let CCC calculate the minimum.
   const tx = ccc.Transaction.from({
     inputs: [{ previousOutput: itemOutPoint }],
     outputs: [{
@@ -86,7 +88,6 @@ export async function buildListTx(
         hashType: 'type',
         args: '0x',
       },
-      capacity: itemCapacity,
     }],
     outputsData: [itemData],
     cellDeps: [marketItemCellDep(), lsdlCellDep()],
