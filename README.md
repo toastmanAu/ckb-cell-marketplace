@@ -93,7 +93,24 @@ Content detection:
 - 4 JPEG images (512x512, cyberpunk/biodome themes)
 - 13 more pending CKBFS storage rewrite
 
-## Build
+## CellSwap Frontend
+
+Live at **[cellswap.xyz](https://cellswap.xyz)** — a forkable testnet reference implementation.
+
+```bash
+cd frontend
+npm install
+npm run dev      # → http://localhost:5173
+npm run build    # → frontend/dist/ (static, deploy anywhere)
+```
+
+**Stack:** React 18 + Vite + TypeScript + `@ckb-ccc/connector-react` (JoyID + MetaMask)
+
+**Features:** Browse listings, buy cells, mint MarketItem content, list for sale with royalties, cancel listings. All transactions signed client-side — no backend, no admin keys, fully trustless.
+
+**Fork it:** All contract addresses live in `frontend/src/config.ts`. Change that one file to point at your own deployed contracts.
+
+## Build (Contracts)
 
 ```bash
 # Type script
@@ -121,6 +138,10 @@ ckb-cell-marketplace/
 │   ├── deploy-testnet.sh         # Deployment script
 │   └── deployment.toml           # Deploy config
 ├── deploy/                       # Testnet deployment info
+├── frontend/                     # CellSwap SPA (React/Vite/TS)
+│   ├── src/lib/                  # Blockchain logic (codec, indexer, TX builders)
+│   ├── src/components/           # UI components
+│   └── src/hooks/                # React hooks
 ├── docs/
 │   └── benchmarks/               # Cycle cost reports
 └── build/                        # Compiled binary
@@ -139,8 +160,8 @@ ckb-cell-marketplace/
 - [x] LSDL lock script (royalties + expiration)
 - [x] Both deployed to testnet
 - [x] Test data minted
-- [ ] Frontend marketplace (React/Vite + CCC)
-- [ ] NFT minting interface (based on DOB minter)
+- [x] Frontend marketplace (React/Vite + CCC) — cellswap.xyz
+- [x] Mint, list, buy, cancel flows
 
 ### Phase 2 — Multi-Format
 - [ ] Spore DOB detection + rendering
