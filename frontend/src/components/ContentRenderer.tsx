@@ -1,4 +1,6 @@
+import { useState, useEffect } from 'react';
 import { categoriseContent, contentToDataUrl, contentToString } from '../lib/content';
+import { resolveCkbfsContent } from '../lib/ckbfs-resolver';
 import type { MarketItem } from '../types';
 
 interface ContentRendererProps {
@@ -8,7 +10,7 @@ interface ContentRendererProps {
 
 /** Check if content bytes look like a ckbfs:// URI reference rather than raw binary */
 function isCkbfsRef(content: Uint8Array): boolean {
-  if (content.length > 200) return false; // real images are larger
+  if (content.length > 200) return false;
   try {
     const text = new TextDecoder().decode(content);
     return text.startsWith('ckbfs://');
@@ -17,18 +19,58 @@ function isCkbfsRef(content: Uint8Array): boolean {
   }
 }
 
-export function ContentRenderer({ item, mode }: ContentRendererProps) {
-  const category = categoriseContent(item.contentType);
+/** Sub-component that resolves and renders CKBFS content */
+function CkbfsContent({ uri, description, mode }: {
+  uri: string; contentType?: string; description: string; mode: 'preview' | 'full';
+}) {
+  const [state, setState] = useState<'loading' | 'done' | 'error'>('loading');
+  const [resolved, setResolved] = useState<{ fileBytes: Uint8Array; contentType: string } | null>(null);
+  const [error, setError] = useState('');
   const isPreview = mode === 'preview';
 
-  // Handle CKBFS references — content is a URI, not the actual file
-  if (isCkbfsRef(item.content)) {
-    const uri = new TextDecoder().decode(item.content);
+  useEffect(() => {
+    let cancelled = false;
+    setState('loading');
+    resolveCkbfsContent(uri, 'testnet')
+      .then(result => {
+        if (cancelled) return;
+        setResolved(result);
+        setState('done');
+      })
+      .catch(e => {
+        if (cancelled) return;
+        setError(e instanceof Error ? e.message : String(e));
+        setState('error');
+      });
+    return () => { cancelled = true; };
+  }, [uri]);
+
+  if (state === 'loading') {
     return (
       <div style={{
         background: 'var(--surface2)',
         borderRadius: '8px',
         padding: isPreview ? '0.75rem' : '1.25rem',
+        height: isPreview ? '180px' : '200px',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '0.5rem',
+      }}>
+        <div className="tx-protocol-text" style={{ marginTop: 0, fontSize: '0.7rem' }}>
+          Resolving from CKBFS...
+        </div>
+      </div>
+    );
+  }
+
+  if (state === 'error') {
+    return (
+      <div style={{
+        background: 'var(--surface2)',
+        borderRadius: '8px',
+        padding: '1rem',
         height: isPreview ? '180px' : 'auto',
         display: 'flex',
         flexDirection: 'column',
@@ -36,17 +78,71 @@ export function ContentRenderer({ item, mode }: ContentRendererProps) {
         justifyContent: 'center',
         gap: '0.5rem',
       }}>
-        <span style={{ fontSize: '1.5rem' }}>&#x1F5C4;</span>
-        <span style={{ fontSize: '0.82rem', color: 'var(--accent)', fontFamily: "'JetBrains Mono', monospace" }}>
-          CKBFS Stored
-        </span>
+        <span style={{ fontSize: '1.2rem' }}>&#x1F5C4;</span>
+        <span style={{ fontSize: '0.78rem', color: 'var(--red)' }}>CKBFS resolve failed</span>
         {!isPreview && (
-          <code style={{ fontSize: '0.75rem', color: 'var(--muted)', wordBreak: 'break-all' }}>
-            {uri}
-          </code>
+          <code style={{ fontSize: '0.7rem', color: 'var(--muted)', wordBreak: 'break-all' }}>{error}</code>
         )}
       </div>
     );
+  }
+
+  // Resolved — render the actual content
+  if (resolved && resolved.contentType.startsWith('image/')) {
+    let binary = '';
+    for (let i = 0; i < resolved.fileBytes.length; i++) {
+      binary += String.fromCharCode(resolved.fileBytes[i]);
+    }
+    const dataUrl = `data:${resolved.contentType};base64,${btoa(binary)}`;
+    return (
+      <img
+        src={dataUrl}
+        alt={description}
+        style={{
+          width: '100%',
+          height: isPreview ? '180px' : 'auto',
+          maxHeight: isPreview ? '180px' : '500px',
+          objectFit: isPreview ? 'cover' : 'contain',
+          borderRadius: '8px',
+          background: 'var(--surface2)',
+        }}
+      />
+    );
+  }
+
+  // Non-image CKBFS content
+  if (resolved) {
+    const text = new TextDecoder().decode(resolved.fileBytes);
+    return (
+      <pre style={{
+        background: 'var(--surface2)',
+        borderRadius: '8px',
+        padding: isPreview ? '0.75rem' : '1.25rem',
+        fontSize: isPreview ? '0.78rem' : '0.88rem',
+        color: 'var(--green)',
+        fontFamily: "'JetBrains Mono', monospace",
+        whiteSpace: 'pre-wrap',
+        wordBreak: 'break-word',
+        maxHeight: isPreview ? '180px' : '500px',
+        overflow: 'auto',
+        lineHeight: 1.5,
+      }}>
+        {isPreview ? text.slice(0, 300) : text}
+      </pre>
+    );
+  }
+
+  return null;
+}
+
+export function ContentRenderer({ item, mode }: ContentRendererProps) {
+  const category = categoriseContent(item.contentType);
+  const isPreview = mode === 'preview';
+
+  // Handle CKBFS references — resolve and render actual content from chain
+  if (isCkbfsRef(item.content)) {
+    const uri = new TextDecoder().decode(item.content);
+    return <CkbfsContent uri={uri} description={item.description} mode={mode} />;
   }
 
   if (category === 'image') {
@@ -107,11 +203,14 @@ export function ContentRenderer({ item, mode }: ContentRendererProps) {
         </div>
       );
     }
-    const blob = new Blob([item.content.slice().buffer], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
+    let binary = '';
+    for (let i = 0; i < item.content.length; i++) {
+      binary += String.fromCharCode(item.content[i]);
+    }
+    const dataUrl = `data:text/html;base64,${btoa(binary)}`;
     return (
       <iframe
-        src={url}
+        src={dataUrl}
         title={item.description}
         sandbox="allow-scripts"
         style={{
