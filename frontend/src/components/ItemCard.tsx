@@ -1,0 +1,40 @@
+import { Link } from 'react-router-dom';
+import { ccc } from '@ckb-ccc/connector-react';
+import { ContentRenderer } from './ContentRenderer';
+import { categoriseContent, categoryLabel, badgeClass } from '../lib/content';
+import { shannonsToCkb } from '../lib/codec';
+import type { ListingInfo } from '../types';
+
+interface ItemCardProps {
+  listing: ListingInfo;
+}
+
+export function ItemCard({ listing }: ItemCardProps) {
+  const { marketItem, lsdlArgs, outPoint } = listing;
+  const category = categoriseContent(marketItem.contentType);
+  const outPointId = `${ccc.hexFrom(outPoint.txHash)}:${outPoint.index}`;
+
+  return (
+    <Link to={`/item/${encodeURIComponent(outPointId)}`} style={{ textDecoration: 'none' }}>
+      <div className="card" style={{ cursor: 'pointer' }}>
+        <div style={{ marginBottom: '0.75rem' }}>
+          <ContentRenderer item={marketItem} mode="preview" />
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+          <span className={badgeClass(category)}>{categoryLabel(marketItem.contentType)}</span>
+          <span className="price">{shannonsToCkb(lsdlArgs.totalValue)} CKB</span>
+        </div>
+        <div style={{ fontSize: '0.88rem', color: 'var(--text)', lineHeight: 1.4 }}>
+          {marketItem.description.length > 80
+            ? marketItem.description.slice(0, 80) + '...'
+            : marketItem.description}
+        </div>
+        {lsdlArgs.royaltyBps > 0 && (
+          <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: '0.4rem' }}>
+            {(lsdlArgs.royaltyBps / 100).toFixed(1)}% royalty
+          </div>
+        )}
+      </div>
+    </Link>
+  );
+}
