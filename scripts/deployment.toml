@@ -2,3 +2,9 @@
 name = "market-item-type"
 enable_type_id = true
 location = { file = "build/market-item-type" }
+
+# Lock script for the deployed cell — secp256k1-blake160 (account 0)
+[lock]
+code_hash = "0x9bd7e06f3ecf4be0f2fcd2188b23f1b9fcc88e5d4b65a8637b17723bbda3cce8"
+args = "0x98ecd69bb16e590486d6109bd129caf6b7ca02fe"
+hash_type = "type"
