@@ -47,13 +47,32 @@ export async function publishToCkbfs(
     version: ProtocolVersion.V3,
   });
 
+  // Extract the CKBFS TypeID from the transaction outputs BEFORE sending.
+  // The CKBFS cell has a type script whose args contain the TypeID.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const txOutputs = (signedTx as any).outputs || [];
+  let typeId = '';
+  for (const output of txOutputs) {
+    const typeScript = output.type;
+    if (typeScript && typeScript.args) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { ccc: cccCore } = await import('@ckb-ccc/connector-react');
+      const argsHex = cccCore.hexFrom(typeScript.args);
+      // TypeID is 32 bytes (66 chars with 0x prefix)
+      if (argsHex.length === 66) {
+        typeId = argsHex;
+        break;
+      }
+    }
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const txHash = await signer.sendTransaction(signedTx as any);
 
-  // Construct a ckbfs:// URI from the tx hash and first output index
-  const uri = `ckbfs://${txHash}:0`;
+  // Use the actual TypeID for the ckbfs:// URI — this is what the resolver searches by
+  const uri = typeId ? `ckbfs://${typeId}` : `ckbfs://${txHash}:0`;
 
-  return { txHash, typeId: '', uri };
+  return { txHash, typeId, uri };
 }
 
 /** Estimate CKBFS storage cost */

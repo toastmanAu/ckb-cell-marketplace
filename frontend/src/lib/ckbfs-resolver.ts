@@ -45,14 +45,29 @@ function hexToBytes(hex: string): Uint8Array {
 
 // ── Parse ckbfs:// identifier ───────────────────────
 
-function parseIdentifier(input: string): string {
-  let typeId = input.trim();
-  if (typeId.startsWith('ckbfs://')) typeId = typeId.slice('ckbfs://'.length);
-  // Handle ckbfs://txhash:index format — extract just the txhash part
-  if (typeId.includes(':')) typeId = typeId.split(':')[0];
-  if (!typeId.startsWith('0x')) typeId = '0x' + typeId;
-  if (typeId.length !== 66) throw new Error('Invalid TypeID — expected 32-byte hex (0x + 64 chars)');
-  return typeId;
+interface CkbfsId {
+  hash: string;        // 32-byte hex (0x-prefixed)
+  outputIndex: number; // only meaningful for txHash format
+  isTxHash: boolean;   // true if ckbfs://txhash:index format (legacy)
+}
+
+function parseIdentifier(input: string): CkbfsId {
+  let raw = input.trim();
+  if (raw.startsWith('ckbfs://')) raw = raw.slice('ckbfs://'.length);
+
+  let outputIndex = 0;
+  let isTxHash = false;
+  if (raw.includes(':')) {
+    const parts = raw.split(':');
+    raw = parts[0];
+    outputIndex = parseInt(parts[1] || '0', 10);
+    isTxHash = true; // colon format = legacy txHash:index
+  }
+
+  if (!raw.startsWith('0x')) raw = '0x' + raw;
+  if (raw.length !== 66) throw new Error('Invalid identifier — expected 32-byte hex');
+
+  return { hash: raw, outputIndex, isTxHash };
 }
 
 // ── Molecule decoder (handles V2 4-field and V3 4-field schemas) ─────────
@@ -139,29 +154,64 @@ export async function resolveCkbfsContent(
   uri: string,
   network = 'testnet',
 ): Promise<CkbfsResolvedContent> {
-  const typeId = parseIdentifier(uri);
+  const id = parseIdentifier(uri);
 
-  // Search all known CKBFS code hashes
-  let cells: { out_point: { tx_hash: string }; output_data: string }[] = [];
-  for (const codeHash of CKBFS_CODE_HASHES) {
-    const result = await ckbRpc(network, 'get_cells', [{
-      script: { code_hash: codeHash, hash_type: 'data1', args: typeId },
-      script_type: 'type',
-      filter: null,
-    }, 'asc', '0x1']) as { objects?: { out_point: { tx_hash: string }; output_data: string }[] };
-    cells = result?.objects || [];
-    if (cells.length) break;
+  let txHash: string;
+  let outputData: string;
+
+  if (id.isTxHash) {
+    // Legacy format: ckbfs://txhash:outputIndex — fetch TX directly and find the CKBFS output
+    const txResult = await ckbRpc(network, 'get_transaction', [id.hash]) as {
+      transaction?: { outputs?: { type?: { code_hash: string; args: string } }[]; witnesses?: string[] };
+      tx_status?: { status: string };
+    };
+    if (!txResult?.transaction) throw new Error(`Transaction ${id.hash.slice(0, 18)}… not found`);
+
+    // Find the CKBFS output by checking type script code_hash against known CKBFS hashes
+    const outputs = txResult.transaction.outputs || [];
+    let ckbfsOutputIdx = -1;
+    for (let i = 0; i < outputs.length; i++) {
+      const typeScript = outputs[i].type;
+      if (typeScript && CKBFS_CODE_HASHES.includes(typeScript.code_hash)) {
+        ckbfsOutputIdx = i;
+        break;
+      }
+    }
+    if (ckbfsOutputIdx === -1) throw new Error('No CKBFS output found in transaction');
+
+    // Now fetch the live cell to get output_data (TX response doesn't include it)
+    const cellResult = await ckbRpc(network, 'get_live_cell', [
+      { tx_hash: id.hash, index: `0x${ckbfsOutputIdx.toString(16)}` },
+      true,
+    ]) as { cell?: { data?: { content: string } } };
+
+    outputData = cellResult?.cell?.data?.content || '0x';
+    txHash = id.hash;
+  } else {
+    // Standard format: ckbfs://typeId — search by type script args
+    let cells: { out_point: { tx_hash: string }; output_data: string }[] = [];
+    for (const codeHash of CKBFS_CODE_HASHES) {
+      const result = await ckbRpc(network, 'get_cells', [{
+        script: { code_hash: codeHash, hash_type: 'data1', args: id.hash },
+        script_type: 'type',
+        filter: null,
+      }, 'asc', '0x1']) as { objects?: { out_point: { tx_hash: string }; output_data: string }[] };
+      cells = result?.objects || [];
+      if (cells.length) break;
+    }
+    if (!cells.length) throw new Error(`No CKBFS cell found for ${id.hash.slice(0, 18)}…`);
+
+    outputData = cells[0].output_data || '0x';
+    txHash = cells[0].out_point.tx_hash;
   }
-  if (!cells.length) throw new Error(`No CKBFS cell found for ${typeId.slice(0, 18)}…`);
 
-  const cell = cells[0];
-  const meta = decodeCKBFSData(cell.output_data || '0x');
+  const meta = decodeCKBFSData(outputData);
 
-  // Fetch the transaction to get witnesses
-  const txResult = await ckbRpc(network, 'get_transaction', [cell.out_point.tx_hash]) as {
+  // Fetch the transaction to get witnesses (may already have it for txHash path)
+  const witnessTxResult = await ckbRpc(network, 'get_transaction', [txHash]) as {
     transaction?: { witnesses?: string[] };
   };
-  const witnesses = txResult?.transaction?.witnesses || [];
+  const witnesses = witnessTxResult?.transaction?.witnesses || [];
 
   // Reassemble chunks
   const chunks: Uint8Array[] = [];
