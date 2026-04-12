@@ -68,7 +68,7 @@ export function ContentRenderer({ item, mode }: ContentRendererProps) {
         </div>
       );
     }
-    const blob = new Blob([item.content.buffer as ArrayBuffer], { type: 'text/html' });
+    const blob = new Blob([item.content.slice().buffer], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     return (
       <iframe

@@ -26,7 +26,8 @@ export function categoryLabel(contentType: string): string {
 
 /** Convert content bytes to a data URL for preview */
 export function contentToDataUrl(content: Uint8Array, contentType: string): string {
-  const blob = new Blob([content.buffer as ArrayBuffer], { type: contentType });
+  // Use slice() to get a clean copy — content.buffer may be a larger shared ArrayBuffer
+  const blob = new Blob([content.slice().buffer], { type: contentType });
   return URL.createObjectURL(blob);
 }
 
