@@ -1,0 +1,7 @@
+vector Bytes <byte>;
+
+table MarketItem {
+    content_type: Bytes,
+    description:  Bytes,
+    content:      Bytes,
+}

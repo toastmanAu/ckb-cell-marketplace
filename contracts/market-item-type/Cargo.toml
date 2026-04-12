@@ -1,0 +1,17 @@
+[package]
+name = "market-item-type"
+version = "0.1.0"
+edition = "2021"
+description = "CKB type script for MarketItem envelope — validates content_type + description + content"
+license = "MIT"
+
+[dependencies]
+ckb-std = "0.15.1"
+
+[profile.release]
+overflow-checks = true
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
