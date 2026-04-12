@@ -46,7 +46,8 @@ export function ListItem({ item, onListed, onCancel }: ListItemProps) {
       setTxState({ status: 'signing' });
       const txHash = await signer.sendTransaction(tx);
       setTxState({ status: 'success', txHash });
-      onListed();
+      // Don't call onListed() here — wait for user to dismiss TxStatus,
+      // giving the indexer time to pick up the new LSDL-locked cell
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       setTxState({ status: 'error', message: msg });
@@ -102,7 +103,7 @@ export function ListItem({ item, onListed, onCancel }: ListItemProps) {
         <button className="btn btn-ghost" onClick={onCancel}>Cancel</button>
       </div>
 
-      <TxStatus state={txState} onClose={() => setTxState({ status: 'idle' })} />
+      <TxStatus state={txState} onClose={() => { setTxState({ status: 'idle' }); onListed(); }} />
     </div>
   );
 }

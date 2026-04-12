@@ -25,10 +25,13 @@ export function categoryLabel(contentType: string): string {
 }
 
 /** Convert content bytes to a data URL for preview */
+/** Convert content bytes to a base64 data URL — proven approach from DOB minter */
 export function contentToDataUrl(content: Uint8Array, contentType: string): string {
-  // Use slice() to get a clean copy — content.buffer may be a larger shared ArrayBuffer
-  const blob = new Blob([content.slice().buffer], { type: contentType });
-  return URL.createObjectURL(blob);
+  let binary = '';
+  for (let i = 0; i < content.length; i++) {
+    binary += String.fromCharCode(content[i]);
+  }
+  return `data:${contentType};base64,${btoa(binary)}`;
 }
 
 /** Convert content bytes to string (for text/json/html) */
