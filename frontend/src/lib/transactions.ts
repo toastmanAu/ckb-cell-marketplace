@@ -67,7 +67,7 @@ export async function buildMintTx(
 
   await tx.completeInputsByCapacity(signer);
   padWitnessForFeeEstimate(tx);
-  await tx.completeFeeBy(signer, 1000);
+  await tx.completeFeeBy(signer, 1500);
   return tx;
 }
 
@@ -106,7 +106,7 @@ export async function buildImmutableMintTx(
 
   await tx.completeInputsByCapacity(signer);
   padWitnessForFeeEstimate(tx);
-  await tx.completeFeeBy(signer, 1000);
+  await tx.completeFeeBy(signer, 1500);
   return tx;
 }
 
@@ -157,7 +157,7 @@ export async function buildListTx(
 
   await tx.completeInputsByCapacity(signer);
   padWitnessForFeeEstimate(tx);
-  await tx.completeFeeBy(signer, 1000);
+  await tx.completeFeeBy(signer, 1500);
   return tx;
 }
 
@@ -221,7 +221,7 @@ export async function buildBuyTx(
 
   await tx.completeInputsByCapacity(signer);
   padWitnessForFeeEstimate(tx);
-  await tx.completeFeeBy(signer, 1000);
+  await tx.completeFeeBy(signer, 1500);
   return tx;
 }
 
@@ -246,6 +246,6 @@ export async function buildCancelTx(
 
   await tx.completeInputsByCapacity(signer);
   padWitnessForFeeEstimate(tx);
-  await tx.completeFeeBy(signer, 1000);
+  await tx.completeFeeBy(signer, 1500);
   return tx;
 }
