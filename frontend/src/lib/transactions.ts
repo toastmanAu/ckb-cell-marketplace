@@ -1,16 +1,21 @@
 import { ccc } from '@ckb-ccc/connector-react';
-import { MARKET_ITEM_TYPE, LSDL } from '../config';
+import { MARKET_ITEM_TYPE, LSDL, MIN_CELL_CAPACITY } from '../config';
 import { encodeMarketItem, encodeLsdlArgs, decodeLsdlArgs } from './codec';
 
 // Conservative WitnessArgs placeholder. Pre-populating witness[0] before
 // completeFeeBy guards against signer subclasses whose prepareTransaction is
-// the base-class no-op (e.g. default CCC Signer) — in that path, tx size is
-// under-reported and the pool's min-fee check rejects the tx. 1000 bytes
-// covers JoyID's real webauthn signature; lighter wallets will overwrite it
-// with a smaller placeholder during actual signing — we just overpay slightly.
+// the base-class no-op (e.g. default CCC Signer). The placeholder's lock byte
+// length must be >= the signer's real signature length, otherwise estimateFee
+// measures a smaller tx than what's actually submitted and the pool rejects.
+//
+// 2000 bytes covers current JoyID WebAuthn signatures (observed ~1500-1600
+// bytes after platform-authenticator attestation growth) with headroom. Real
+// signatures replace the placeholder at sign time — we just slightly overpay.
+// Observed in cellSwapError1.png (2026-04-14): 1000-byte placeholder under-
+// counted by 560 bytes → PoolRejectedTransactionByMinFeeRate.
 function padWitnessForFeeEstimate(tx: ccc.Transaction): void {
   const placeholder = ccc.WitnessArgs.from({
-    lock: '0x' + '00'.repeat(1000),
+    lock: '0x' + '00'.repeat(2000),
   });
   if (tx.witnesses.length === 0) {
     tx.witnesses.push(ccc.hexFrom(placeholder.toBytes()));
@@ -190,13 +195,21 @@ export async function buildBuyTx(
   }, '0x');
 
   // Output[1]: creator royalty (at LSDL input index + 1)
+  // Cell capacity must cover the royalty amount AND the minimum cell size.
+  // Before fix: no capacity was set, so auto-sized to MIN_CELL_CAPACITY and the
+  // royaltyAmount delta above the minimum was silently dropped — the buyer paid
+  // the listing price minus that delta, and the creator received only the min
+  // cell (observed for Electric Digital Forrest: expected 75 CKB royalty, got
+  // 61 CKB cell — 14 CKB of royalty was unallocated).
   if (royaltyAmount > 0n) {
+    const royaltyCapacity = royaltyAmount > MIN_CELL_CAPACITY ? royaltyAmount : MIN_CELL_CAPACITY;
     tx.addOutput({
       lock: {
         codeHash: '0x9bd7e06f3ecf4be0f2fcd2188b23f1b9fcc88e5d4b65a8637b17723bbda3cce8',
         hashType: 'type',
         args: ccc.hexFrom(creatorLockHash),
       },
+      capacity: royaltyCapacity,
     }, '0x');
   }
 
