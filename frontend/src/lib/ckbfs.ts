@@ -1,5 +1,14 @@
-import { publishCKBFSV3, ProtocolVersion, NetworkType } from '@ckbfs/api';
-import type { ccc } from '@ckb-ccc/connector-react';
+import {
+  CKBFSData,
+  createChunkedCKBFSV3Witnesses,
+  calculateChecksum,
+  ProtocolVersion,
+} from '@ckbfs/api';
+import { ccc } from '@ckb-ccc/connector-react';
+
+// CKBFS V3 testnet constants (from @ckbfs/api/dist/utils/constants)
+const CKBFS_V3_CODE_HASH = '0xb5d13ffe0547c78021c01fe24dce2e959a1ed8edbca3cb93dd2e9f57fb56d695';
+const CKBFS_V3_DEP_GROUP_TX = '0x47cfa8d554cccffe7796f93b58437269de1f98f029d0a52b6b146381f3e95e61';
 
 /** Chunk content into ~500KB pieces for CKBFS V3 witness storage */
 function chunkContent(data: Uint8Array, chunkSize = 500_000): Uint8Array[] {
@@ -18,13 +27,12 @@ export interface CkbfsPublishResult {
 
 /**
  * Publish content to CKBFS V3.
- * Returns tx hash and a ckbfs:// URI to store as the MarketItem content.
  *
- * Note: publishCKBFSV3 returns a signed Transaction; we send it with signer.sendTransaction.
- *
- * @ckbfs/api uses @ckb-ccc/core@^0.1.0-alpha.7 while this frontend uses @ckb-ccc/connector-react@1.0.34.
- * The Signer classes are structurally compatible at runtime but distinct at the TypeScript level,
- * so we use an eslint-disable + any cast at the publishCKBFSV3 call boundary.
+ * Order matters: CKBFS witnesses are appended AFTER completeInputsByCapacity,
+ * because CCC's addInput splices an empty witness at inputs.length whenever
+ * witnesses.length > inputs.length — which would shift any pre-populated head
+ * witness out of the slot pointed to by cell data's `index` field (causing the
+ * script to parse signing-placeholder bytes as prev_tx_hash → error 112).
  */
 export async function publishToCkbfs(
   signer: ccc.Signer,
@@ -36,42 +44,127 @@ export async function publishToCkbfs(
   const lock = addressObj.script;
   const chunks = chunkContent(content);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const signedTx = await publishCKBFSV3(signer as any, {
-    contentChunks: chunks,
+  const combined = new Uint8Array(content.length);
+  let offset = 0;
+  for (const chunk of chunks) {
+    combined.set(chunk, offset);
+    offset += chunk.length;
+  }
+  const checksum = await calculateChecksum(combined);
+
+  // Phase 1: pre-pack cell data with placeholder index to get correct capacity.
+  // The u32 encoding is always 4 bytes so the final re-pack won't change size.
+  const provisionalData = CKBFSData.pack({
+    index: 1,
+    checksum,
     contentType,
     filename,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    lock: lock as any,
-    network: NetworkType.Testnet,
-    version: ProtocolVersion.V3,
+  }, ProtocolVersion.V3);
+
+  const tx = ccc.Transaction.from({
+    outputs: [{
+      lock,
+      type: {
+        codeHash: CKBFS_V3_CODE_HASH,
+        hashType: 'data1',
+        args: '0x' + '00'.repeat(32), // placeholder TypeID — replaced once inputs are known
+      },
+    }],
+    outputsData: [ccc.hexFrom(provisionalData)],
+    cellDeps: [{
+      outPoint: { txHash: CKBFS_V3_DEP_GROUP_TX, index: 0 },
+      depType: 'depGroup',
+    }],
   });
 
-  // Extract the CKBFS TypeID from the transaction outputs BEFORE sending.
-  // The CKBFS cell has a type script whose args contain the TypeID.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const txOutputs = (signedTx as any).outputs || [];
-  let typeId = '';
-  for (const output of txOutputs) {
-    const typeScript = output.type;
-    if (typeScript && typeScript.args) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { ccc: cccCore } = await import('@ckb-ccc/connector-react');
-      const argsHex = cccCore.hexFrom(typeScript.args);
-      // TypeID is 32 bytes (66 chars with 0x prefix)
-      if (argsHex.length === 66) {
-        typeId = argsHex;
-        break;
-      }
-    }
+  // Phase 2: let CCC pick inputs. Without any witnesses pre-populated, addInput's
+  // splice guard does not trigger, so no phantom padding witnesses get injected.
+  await tx.completeInputsByCapacity(signer);
+
+  // Phase 3: with inputs.length fixed, the CKBFS head sits at witnesses[inputs.length]
+  // (first output-side witness slot). The script reads tx.witnesses[data.index]
+  // directly — Source::Output for load_witness is the same index space as Source::Input
+  // in ckb-vm; both return witnesses[index].
+  const contentStartIndex = tx.inputs.length;
+
+  const finalData = CKBFSData.pack({
+    index: contentStartIndex,
+    checksum,
+    contentType,
+    filename,
+  }, ProtocolVersion.V3);
+  tx.outputsData[0] = ccc.hexFrom(finalData);
+
+  const ckbfsWitnesses = createChunkedCKBFSV3Witnesses(chunks, {
+    previousTxHash: '0x' + '00'.repeat(32),
+    previousWitnessIndex: 0,
+    previousChecksum: 0,
+    startIndex: contentStartIndex,
+  });
+
+  while (tx.witnesses.length < tx.inputs.length) {
+    tx.witnesses.push('0x');
+  }
+  for (const w of ckbfsWitnesses) {
+    tx.witnesses.push(ccc.hexFrom(w));
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const txHash = await signer.sendTransaction(signedTx as any);
+  // Conservative placeholder: inject a 1000-byte lock into witness[0] directly
+  // instead of relying on signer.prepareTransaction, which is a no-op on the
+  // default ccc Signer base class and only overridden by some wallet subclasses
+  // (JoyID → 1000 bytes, secp256k1 → 65 bytes). 1000 bytes covers JoyID's real
+  // webauthn signature; cheaper wallets overpay a few shannons but never
+  // under-report size → pool's min-fee check always passes.
+  const placeholderWitness = ccc.WitnessArgs.from({
+    lock: '0x' + '00'.repeat(1000),
+  });
+  tx.witnesses[0] = ccc.hexFrom(placeholderWitness.toBytes());
 
-  // Use the actual TypeID for the ckbfs:// URI — this is what the resolver searches by
-  const uri = typeId ? `ckbfs://${typeId}` : `ckbfs://${txHash}:0`;
+  const preparedTx = await signer.prepareTransaction(tx);
 
+  const txSize = preparedTx.toBytes().length + 4;
+  const requiredFee = BigInt(Math.ceil(txSize * 1200 / 1000));
+
+  let totalInputCapacity = 0n;
+  for (const input of preparedTx.inputs) {
+    const cell = await signer.client.getCell(input.previousOutput);
+    if (cell) totalInputCapacity += cell.cellOutput.capacity;
+  }
+  let totalOutputCapacity = 0n;
+  for (const output of preparedTx.outputs) {
+    totalOutputCapacity += output.capacity;
+  }
+  const currentFee = totalInputCapacity - totalOutputCapacity;
+
+  if (currentFee > requiredFee + 6100000000n) {
+    preparedTx.addOutput({ lock }, '0x');
+    preparedTx.outputs[preparedTx.outputs.length - 1].capacity = currentFee - requiredFee;
+  }
+
+  const debug = [
+    `w[0]pre=${tx.witnesses[0].length}`,
+    `w[0]post=${preparedTx.witnesses[0].length}`,
+    `size=${txSize}`,
+    `feeReq=${requiredFee}`,
+    `feeHave=${currentFee}`,
+    `signer=${signer.constructor?.name}`,
+  ].join(' ');
+  (window as unknown as { __CKBFS_DEBUG__: string }).__CKBFS_DEBUG__ = debug;
+  console.log('[ckbfs]', debug);
+
+  const typeIdArgs = ccc.hashTypeId(preparedTx.inputs[0], 0);
+  preparedTx.outputs[0].type = new ccc.Script(CKBFS_V3_CODE_HASH, 'data1', typeIdArgs);
+
+  const typeId = ccc.hexFrom(typeIdArgs);
+  let txHash: string;
+  try {
+    txHash = await signer.sendTransaction(preparedTx);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(`${msg} [${debug}]`);
+  }
+
+  const uri = `ckbfs://${typeId}`;
   return { txHash, typeId, uri };
 }
 

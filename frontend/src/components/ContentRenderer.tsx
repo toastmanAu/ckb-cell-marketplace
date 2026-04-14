@@ -1,4 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 import { categoriseContent, contentToDataUrl, contentToString } from '../lib/content';
 import { resolveCkbfsContent } from '../lib/ckbfs-resolver';
 import type { MarketItem } from '../types';
@@ -135,6 +137,42 @@ function CkbfsContent({ uri, description, mode }: {
   return null;
 }
 
+/** Renders sanitized markdown as HTML using DOMPurify for XSS protection */
+function MarkdownViewer({ markdown }: { markdown: string }) {
+  const [node, setNode] = useState<HTMLDivElement | null>(null);
+
+  const safeHtml = useMemo(() => {
+    const raw = marked.parse(markdown, { async: false }) as string;
+    return DOMPurify.sanitize(raw);
+  }, [markdown]);
+
+  useEffect(() => {
+    if (node) {
+      // Content is sanitized by DOMPurify above — safe to render
+      const range = document.createRange();
+      const fragment = range.createContextualFragment(safeHtml);
+      node.replaceChildren(fragment);
+    }
+  }, [node, safeHtml]);
+
+  return (
+    <div
+      ref={setNode}
+      className="markdown-body"
+      style={{
+        background: 'var(--surface2)',
+        borderRadius: '8px',
+        padding: '1.25rem',
+        maxHeight: '500px',
+        overflow: 'auto',
+        fontSize: '0.9rem',
+        lineHeight: 1.7,
+        color: 'var(--fg)',
+      }}
+    />
+  );
+}
+
 export function ContentRenderer({ item, mode }: ContentRendererProps) {
   const category = categoriseContent(item.contentType);
   const isPreview = mode === 'preview';
@@ -182,6 +220,30 @@ export function ContentRenderer({ item, mode }: ContentRendererProps) {
         {isPreview ? text.slice(0, 300) : text}
       </pre>
     );
+  }
+
+  if (category === 'markdown') {
+    const md = contentToString(item.content);
+    if (isPreview) {
+      return (
+        <pre style={{
+          background: 'var(--surface2)',
+          borderRadius: '8px',
+          padding: '0.75rem',
+          fontSize: '0.78rem',
+          color: 'var(--cyan)',
+          fontFamily: "'JetBrains Mono', monospace",
+          whiteSpace: 'pre-wrap',
+          wordBreak: 'break-word',
+          maxHeight: '180px',
+          overflow: 'hidden',
+          lineHeight: 1.5,
+        }}>
+          {md.slice(0, 300)}
+        </pre>
+      );
+    }
+    return <MarkdownViewer markdown={md} />;
   }
 
   if (category === 'html') {

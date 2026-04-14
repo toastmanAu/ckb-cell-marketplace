@@ -166,7 +166,7 @@ Static SPA — deploy the `frontend/dist/` folder to any host:
 
 ```bash
 # Cloudflare Pages
-wrangler pages deploy frontend/dist --project-name cellswap
+wrangler pages deploy frontend/dist --project-name cellswap --branch main
 
 # Vercel
 cd frontend && vercel --prod

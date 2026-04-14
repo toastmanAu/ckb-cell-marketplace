@@ -4,6 +4,7 @@ import type { ContentCategory } from '../types';
 export function categoriseContent(contentType: string): ContentCategory {
   if (contentType.startsWith('image/')) return 'image';
   if (contentType === 'text/html') return 'html';
+  if (contentType === 'text/markdown') return 'markdown';
   if (contentType.startsWith('text/')) return 'text';
   return 'data';
 }
@@ -20,6 +21,7 @@ export function categoryLabel(contentType: string): string {
     case 'image': return contentType.replace('image/', '').toUpperCase();
     case 'text': return 'TEXT';
     case 'html': return 'HTML';
+    case 'markdown': return 'MD';
     case 'data': return contentType.split('/').pop()?.toUpperCase() || 'DATA';
   }
 }

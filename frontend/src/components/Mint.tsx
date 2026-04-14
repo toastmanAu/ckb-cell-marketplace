@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useCcc } from '@ckb-ccc/connector-react';
 import { ContentRenderer } from './ContentRenderer';
 import { TxStatus } from './TxStatus';
-import { buildMintTx } from '../lib/transactions';
+import { buildMintTx, buildImmutableMintTx } from '../lib/transactions';
 import { processImage, isProcessableImage, formatBytes, type ImageProcessOptions } from '../lib/image';
 import { publishToCkbfs, estimateCkbfsCost } from '../lib/ckbfs';
 import type { TxState, MarketItem } from '../types';
@@ -13,6 +13,7 @@ const MIME_OPTIONS = [
   'image/jpeg',
   'image/webp',
   'text/plain',
+  'text/markdown',
   'text/html',
   'application/json',
 ];
@@ -36,6 +37,9 @@ export function Mint() {
   // Storage mode
   const [storageMode, setStorageMode] = useState<StorageMode>('inline');
 
+  // Immutable mode — cell can never be transferred, sold, or destroyed
+  const [immutable, setImmutable] = useState(false);
+
   // Image processing options
   const [imgOpts, setImgOpts] = useState<ImageProcessOptions>({
     maxDimension: 512,
@@ -45,7 +49,7 @@ export function Mint() {
   const [processing, setProcessing] = useState(false);
 
   const isImage = isProcessableImage(contentType);
-  const useFileMode = contentType.startsWith('image/') || contentType === 'application/json';
+  const useFileMode = contentType.startsWith('image/') || contentType === 'application/json' || contentType === 'text/markdown';
 
   // The final content to mint (processed if image, raw otherwise)
   const content = isImage && processedContent.length > 0 ? processedContent : rawContent;
@@ -82,7 +86,7 @@ export function Mint() {
 
   // Auto-select CKBFS for large content
   useEffect(() => {
-    if (content.length > 50_000 && storageMode === 'inline') {
+    if (content.length > 500_000 && storageMode === 'inline') {
       setStorageMode('ckbfs');
     }
   }, [content.length, storageMode]);
@@ -91,7 +95,9 @@ export function Mint() {
     const file = e.target.files?.[0];
     if (!file) return;
     setFileName(file.name);
-    if (file.type && MIME_OPTIONS.includes(file.type)) {
+    if (file.name.endsWith('.md') || file.name.endsWith('.markdown')) {
+      setContentType('text/markdown');
+    } else if (file.type && MIME_OPTIONS.includes(file.type)) {
       setContentType(file.type);
     }
     file.arrayBuffer().then(buf => {
@@ -125,14 +131,16 @@ export function Mint() {
         setTxState({ status: 'building', message: 'Minting MarketItem with CKBFS reference...' });
         // Store the CKBFS URI as the content, with original content type
         const uriBytes = new TextEncoder().encode(ckbfsResult.uri);
-        const tx = await buildMintTx(signer, finalMime, description.trim(), uriBytes);
+        const mintFn = immutable ? buildImmutableMintTx : buildMintTx;
+        const tx = await mintFn(signer, finalMime, description.trim(), uriBytes);
         setTxState({ status: 'signing' });
         const txHash = await signer.sendTransaction(tx);
         setTxState({ status: 'success', txHash });
       } else {
         // Inline flow: content goes directly in cell data
         setTxState({ status: 'building', message: 'Constructing mint transaction...' });
-        const tx = await buildMintTx(signer, finalMime, description.trim(), content);
+        const mintFn = immutable ? buildImmutableMintTx : buildMintTx;
+        const tx = await mintFn(signer, finalMime, description.trim(), content);
         setTxState({ status: 'signing' });
         const txHash = await signer.sendTransaction(tx);
         setTxState({ status: 'success', txHash });
@@ -145,7 +153,9 @@ export function Mint() {
       setFileName('');
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
-      setTxState({ status: 'error', message: msg });
+      const dbg = (window as unknown as { __CKBFS_DEBUG__?: string }).__CKBFS_DEBUG__;
+      const full = dbg && !msg.includes('[') ? `${msg} [ckbfs:${dbg}]` : msg;
+      setTxState({ status: 'error', message: full });
     }
   }
 
@@ -197,7 +207,11 @@ export function Mint() {
                     const file = e.dataTransfer.files[0];
                     if (file) {
                       setFileName(file.name);
-                      if (file.type && MIME_OPTIONS.includes(file.type)) setContentType(file.type);
+                      if (file.name.endsWith('.md') || file.name.endsWith('.markdown')) {
+                        setContentType('text/markdown');
+                      } else if (file.type && MIME_OPTIONS.includes(file.type)) {
+                        setContentType(file.type);
+                      }
                       file.arrayBuffer().then(buf => setRawContent(new Uint8Array(buf)));
                     }
                   }}
@@ -319,6 +333,54 @@ export function Mint() {
             </div>
           )}
 
+          {/* Ownership mode */}
+          {content.length > 0 && (
+            <div className="card" style={{ marginBottom: '1rem' }}>
+              <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--muted)', marginBottom: '0.75rem' }}>
+                Ownership
+              </div>
+              <div className="view-toggle" style={{ marginBottom: '0.75rem' }}>
+                <button className={!immutable ? 'active' : ''} onClick={() => setImmutable(false)}>
+                  Normal
+                </button>
+                <button
+                  className={immutable ? 'active' : ''}
+                  onClick={() => setImmutable(true)}
+                  style={immutable ? { background: 'rgba(255, 69, 96, 0.15)', color: 'var(--red)', borderColor: 'var(--red)' } : {}}
+                >
+                  Permanent
+                </button>
+              </div>
+
+              {!immutable && (
+                <div style={{ fontSize: '0.82rem', color: 'var(--muted)', lineHeight: 1.6 }}>
+                  <div>Content is <strong style={{ color: 'var(--green)' }}>immutable</strong> — enforced by the type script on-chain</div>
+                  <div>You own the cell and can list it for sale, transfer it, or burn it</div>
+                </div>
+              )}
+
+              {immutable && (
+                <div style={{
+                  padding: '0.75rem',
+                  background: 'rgba(255, 69, 96, 0.08)',
+                  border: '1px solid rgba(255, 69, 96, 0.25)',
+                  borderRadius: '6px',
+                  fontSize: '0.8rem',
+                  lineHeight: 1.6,
+                  color: 'var(--red)',
+                }}>
+                  <strong>Permanent — no owner, no recovery.</strong>
+                  <ul style={{ margin: '0.4rem 0 0', paddingLeft: '1.2rem' }}>
+                    <li>Content is immutable (same as Normal)</li>
+                    <li>The cell has <strong>no owner</strong> — it cannot be transferred, sold, or destroyed</li>
+                    <li>The CKB capacity locked in this cell is gone forever</li>
+                    <li>Ideal for reference documents, protocol specs, and shared knowledge</li>
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Preview */}
           {preview && !processing && (
             <div className="card" style={{ marginBottom: '1rem' }}>
@@ -329,12 +391,14 @@ export function Mint() {
 
           {/* Mint button */}
           <button
-            className="btn btn-primary"
+            className={`btn ${immutable ? 'btn-danger' : 'btn-primary'}`}
             disabled={!canMint}
             onClick={handleMint}
             style={{ width: '100%', padding: '0.8rem', fontSize: '1rem' }}
           >
-            {storageMode === 'ckbfs' ? 'Publish to CKBFS + Mint' : 'Mint Cell'}
+            {immutable
+              ? 'Mint Immutable Cell (Permanent)'
+              : storageMode === 'ckbfs' ? 'Publish to CKBFS + Mint' : 'Mint Cell'}
           </button>
 
           {!canMint && signer && (

@@ -33,6 +33,9 @@ export function Layout() {
           <a href="https://github.com/toastmanAu/ckb-cell-marketplace" target="_blank" rel="noreferrer">GitHub</a>
           <a href="https://docs.nervos.org" target="_blank" rel="noreferrer">CKB Docs</a>
           <a href="https://testnet.explorer.nervos.org" target="_blank" rel="noreferrer">Explorer</a>
+          <span style={{ opacity: 0.6, fontFamily: 'monospace', fontSize: '.75rem' }}>
+            build {__BUILD_ID__}
+          </span>
         </div>
       </footer>
     </>

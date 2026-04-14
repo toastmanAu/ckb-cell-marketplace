@@ -2,6 +2,23 @@ import { ccc } from '@ckb-ccc/connector-react';
 import { MARKET_ITEM_TYPE, LSDL } from '../config';
 import { encodeMarketItem, encodeLsdlArgs, decodeLsdlArgs } from './codec';
 
+// Conservative WitnessArgs placeholder. Pre-populating witness[0] before
+// completeFeeBy guards against signer subclasses whose prepareTransaction is
+// the base-class no-op (e.g. default CCC Signer) — in that path, tx size is
+// under-reported and the pool's min-fee check rejects the tx. 1000 bytes
+// covers JoyID's real webauthn signature; lighter wallets will overwrite it
+// with a smaller placeholder during actual signing — we just overpay slightly.
+function padWitnessForFeeEstimate(tx: ccc.Transaction): void {
+  const placeholder = ccc.WitnessArgs.from({
+    lock: '0x' + '00'.repeat(1000),
+  });
+  if (tx.witnesses.length === 0) {
+    tx.witnesses.push(ccc.hexFrom(placeholder.toBytes()));
+  } else {
+    tx.witnesses[0] = ccc.hexFrom(placeholder.toBytes());
+  }
+}
+
 /** Cell deps needed for market-item-type */
 function marketItemCellDep(): ccc.CellDepLike {
   return {
@@ -44,6 +61,46 @@ export async function buildMintTx(
   });
 
   await tx.completeInputsByCapacity(signer);
+  padWitnessForFeeEstimate(tx);
+  await tx.completeFeeBy(signer, 1000);
+  return tx;
+}
+
+// ── Immutable Mint ─────────────────────────────────
+// Uses an always-fail lock (all-zero code_hash, data1 hash type).
+// The cell can NEVER be unlocked, transferred, sold, or destroyed.
+// The CKB capacity is permanently locked.
+
+const DEAD_LOCK: ccc.ScriptLike = {
+  codeHash: '0x0000000000000000000000000000000000000000000000000000000000000000',
+  hashType: 'data1',
+  args: '0x',
+};
+
+export async function buildImmutableMintTx(
+  signer: ccc.Signer,
+  contentType: string,
+  description: string,
+  content: Uint8Array,
+): Promise<ccc.Transaction> {
+  const data = encodeMarketItem(contentType, description, content);
+  const dataHex = ccc.hexFrom(data);
+
+  const tx = ccc.Transaction.from({
+    outputs: [{
+      lock: DEAD_LOCK,
+      type: {
+        codeHash: MARKET_ITEM_TYPE.TYPE_ID,
+        hashType: 'type',
+        args: '0x',
+      },
+    }],
+    outputsData: [dataHex],
+    cellDeps: [marketItemCellDep()],
+  });
+
+  await tx.completeInputsByCapacity(signer);
+  padWitnessForFeeEstimate(tx);
   await tx.completeFeeBy(signer, 1000);
   return tx;
 }
@@ -94,6 +151,7 @@ export async function buildListTx(
   });
 
   await tx.completeInputsByCapacity(signer);
+  padWitnessForFeeEstimate(tx);
   await tx.completeFeeBy(signer, 1000);
   return tx;
 }
@@ -149,6 +207,7 @@ export async function buildBuyTx(
   }, listingCell.outputData);
 
   await tx.completeInputsByCapacity(signer);
+  padWitnessForFeeEstimate(tx);
   await tx.completeFeeBy(signer, 1000);
   return tx;
 }
@@ -173,6 +232,7 @@ export async function buildCancelTx(
   });
 
   await tx.completeInputsByCapacity(signer);
+  padWitnessForFeeEstimate(tx);
   await tx.completeFeeBy(signer, 1000);
   return tx;
 }

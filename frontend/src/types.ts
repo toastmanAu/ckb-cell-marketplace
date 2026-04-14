@@ -32,7 +32,7 @@ export interface OwnedItem {
 }
 
 /** Content type categories for UI badges and rendering */
-export type ContentCategory = 'image' | 'text' | 'data' | 'html';
+export type ContentCategory = 'image' | 'text' | 'data' | 'html' | 'markdown';
 
 /** TX processing states */
 export type TxState =

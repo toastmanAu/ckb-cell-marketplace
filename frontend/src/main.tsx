@@ -3,6 +3,13 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import './styles/global.css';
 
+declare const __BUILD_ID__: string;
+console.log(
+  `%c[cellswap] build ${__BUILD_ID__}`,
+  'background:#0f172a;color:#38bdf8;padding:4px 8px;border-radius:4px;font-weight:bold',
+);
+(window as unknown as { __BUILD_ID__: string }).__BUILD_ID__ = __BUILD_ID__;
+
 class ErrorBoundary extends React.Component<
   { children: React.ReactNode },
   { error: Error | null }
