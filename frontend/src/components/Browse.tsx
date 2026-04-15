@@ -18,12 +18,12 @@ const SORT_OPTIONS: Array<{ value: SortOrder; label: string }> = [
 ];
 
 function applySort(items: ListingInfo[], order: SortOrder): ListingInfo[] {
-  // The CCC indexer returns listings in descending creation order by default,
-  // so 'newest' is already the shape we're given and needs no re-sort. For
-  // 'oldest' we reverse the same array rather than add an extra RPC per cell
-  // to resolve confirmation blocks.
-  if (order === 'newest') return items;
-  if (order === 'oldest') return [...items].reverse();
+  // The CCC indexer returns listings in ascending block/tx order, so the
+  // raw array is oldest-first. We reverse for 'newest' and leave as-is for
+  // 'oldest'. Using array position as the age proxy avoids an extra RPC
+  // per cell to resolve confirmation blocks.
+  if (order === 'newest') return [...items].reverse();
+  if (order === 'oldest') return items;
   const copy = [...items];
   switch (order) {
     case 'az':

@@ -8,6 +8,9 @@ import { createClient, fetchCell } from '../lib/indexer';
 import { decodeMarketItem, decodeLsdlArgs, shannonsToCkb } from '../lib/codec';
 import { categoriseContent, categoryLabel, badgeClass, shortAddress } from '../lib/content';
 import { buildBuyTx, buildCancelTx } from '../lib/transactions';
+import { safeSendTransaction } from '../lib/tx-send';
+import { summarizeTx, type TxSummary } from '../lib/tx-summary';
+import { TxConfirmModal } from './TxConfirmModal';
 import { LSDL } from '../config';
 import type { TxState, MarketItem, DecodedLsdlArgs } from '../types';
 
@@ -24,6 +27,12 @@ export function ItemDetail() {
   const [error, setError] = useState('');
   const [txState, setTxState] = useState<TxState>({ status: 'idle' });
   const [userLock, setUserLock] = useState<ccc.Script | null>(null);
+  const [pendingSign, setPendingSign] = useState<null | {
+    action: string;
+    tx: ccc.Transaction;
+    summary: TxSummary;
+    extraInfo: { label: string; value: string }[];
+  }>(null);
 
   // Resolve user lock
   useEffect(() => {
@@ -61,13 +70,25 @@ export function ItemDetail() {
   const isListed = lsdlArgs !== null;
 
   async function handleBuy() {
-    if (!signer || !cell) return;
+    if (!signer || !cell || !userLock) return;
     try {
       setTxState({ status: 'building', message: 'Constructing purchase transaction...' });
       const tx = await buildBuyTx(signer, cell);
-      setTxState({ status: 'signing' });
-      const txHash = await signer.sendTransaction(tx);
-      setTxState({ status: 'success', txHash });
+      const client = createClient();
+      const summary = await summarizeTx(tx, client, userLock);
+      setTxState({ status: 'idle' });
+      setPendingSign({
+        action: 'Buy Cell',
+        tx,
+        summary,
+        extraInfo: lsdlArgs
+          ? [
+              { label: 'Listing price', value: `${(Number(lsdlArgs.totalValue) / 1e8).toFixed(8)} CKB` },
+              { label: 'Royalty', value: `${(lsdlArgs.royaltyBps / 100).toFixed(1)}%` },
+              { label: 'Content type', value: marketItem?.contentType ?? '' },
+            ]
+          : [],
+      });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       setTxState({ status: 'error', message: msg });
@@ -75,17 +96,45 @@ export function ItemDetail() {
   }
 
   async function handleCancel() {
-    if (!signer || !cell) return;
+    if (!signer || !cell || !userLock) return;
     try {
       setTxState({ status: 'building', message: 'Constructing cancel transaction...' });
       const tx = await buildCancelTx(signer, cell);
+      const client = createClient();
+      const summary = await summarizeTx(tx, client, userLock);
+      setTxState({ status: 'idle' });
+      setPendingSign({
+        action: 'Cancel Listing',
+        tx,
+        summary,
+        extraInfo: [
+          { label: 'Content type', value: marketItem?.contentType ?? '' },
+          { label: 'Returns to', value: 'your wallet' },
+        ],
+      });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setTxState({ status: 'error', message: msg });
+    }
+  }
+
+  async function proceedSign() {
+    if (!signer || !pendingSign) return;
+    const { tx } = pendingSign;
+    setPendingSign(null);
+    try {
       setTxState({ status: 'signing' });
-      const txHash = await signer.sendTransaction(tx);
+      const txHash = await safeSendTransaction(signer, tx, (msg) => setTxState({ status: 'building', message: msg }));
       setTxState({ status: 'success', txHash });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       setTxState({ status: 'error', message: msg });
     }
+  }
+
+  function cancelSign() {
+    setPendingSign(null);
+    setTxState({ status: 'idle' });
   }
 
   if (loading) {
@@ -181,6 +230,17 @@ export function ItemDetail() {
             description={marketItem.description}
           />
         </div>
+      )}
+
+      {pendingSign && userLock && (
+        <TxConfirmModal
+          action={pendingSign.action}
+          summary={pendingSign.summary}
+          userLock={userLock}
+          extraInfo={pendingSign.extraInfo}
+          onConfirm={proceedSign}
+          onCancel={cancelSign}
+        />
       )}
     </div>
   );

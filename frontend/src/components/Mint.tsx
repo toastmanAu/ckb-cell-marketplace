@@ -4,6 +4,10 @@ import { useCcc, ccc } from '@ckb-ccc/connector-react';
 import { ContentRenderer } from './ContentRenderer';
 import { TxStatus } from './TxStatus';
 import { buildMintTx, buildImmutableMintTx } from '../lib/transactions';
+import { safeSendTransaction } from '../lib/tx-send';
+import { summarizeTx, type TxSummary } from '../lib/tx-summary';
+import { createClient } from '../lib/indexer';
+import { TxConfirmModal } from './TxConfirmModal';
 import { processImage, isProcessableImage, formatBytes, type ImageProcessOptions } from '../lib/image';
 import { publishToCkbfs, estimateCkbfsCost } from '../lib/ckbfs';
 import { isWalletBlocked, getBlockedWalletReason } from '../moderation';
@@ -35,6 +39,15 @@ export function Mint() {
   }, [signer]);
   const walletBlocked = walletLock ? isWalletBlocked(walletLock) : false;
   const blockReason = walletLock ? getBlockedWalletReason(walletLock) : null;
+
+  // Pre-sign confirmation. When set, a modal renders; onConfirm/onCancel
+  // resolve the pending send.
+  const [pendingSign, setPendingSign] = useState<null | {
+    action: string;
+    tx: ccc.Transaction;
+    summary: TxSummary;
+    extraInfo: { label: string; value: string }[];
+  }>(null);
 
   const [contentType, setContentType] = useState('text/plain');
   const [description, setDescription] = useState('');
@@ -132,35 +145,73 @@ export function Mint() {
   const ckbfsCost = estimateCkbfsCost(content.length);
 
   async function handleMint() {
-    if (!signer || !canMint) return;
+    if (!signer || !canMint || !walletLock) return;
     if (walletBlocked) {
       setTxState({ status: 'error', message: `This wallet is restricted from minting on CellSwap (${blockReason ?? 'see Rules'}).` });
       return;
     }
     try {
+      const client = createClient();
+      const mintFn = immutable ? buildImmutableMintTx : buildMintTx;
+
       if (storageMode === 'ckbfs') {
-        // CKBFS flow: publish content to CKBFS, then mint MarketItem with URI reference
+        // CKBFS flow: publish content to CKBFS, then mint MarketItem with URI reference.
+        // The CKBFS publish tx is signed inside publishToCkbfs; cellswap owns the
+        // tx-object path for the MINT tx below and can show its confirmation there.
         setTxState({ status: 'building', message: 'Publishing to CKBFS...' });
         const ckbfsResult = await publishToCkbfs(signer, content, finalMime, fileName || 'content');
 
-        setTxState({ status: 'building', message: 'Minting MarketItem with CKBFS reference...' });
-        // Store the CKBFS URI as the content, with original content type
+        setTxState({ status: 'building', message: 'Building mint transaction...' });
         const uriBytes = new TextEncoder().encode(ckbfsResult.uri);
-        const mintFn = immutable ? buildImmutableMintTx : buildMintTx;
         const tx = await mintFn(signer, finalMime, description.trim(), uriBytes);
-        setTxState({ status: 'signing' });
-        const txHash = await signer.sendTransaction(tx);
-        setTxState({ status: 'success', txHash });
+        const summary = await summarizeTx(tx, client, walletLock);
+
+        setTxState({ status: 'idle' });
+        setPendingSign({
+          action: immutable ? 'Immutable Mint (via CKBFS)' : 'Mint (via CKBFS)',
+          tx,
+          summary,
+          extraInfo: [
+            { label: 'Content type', value: finalMime },
+            { label: 'CKBFS URI', value: ckbfsResult.uri },
+            { label: 'Description', value: description.trim() },
+          ],
+        });
       } else {
-        // Inline flow: content goes directly in cell data
-        setTxState({ status: 'building', message: 'Constructing mint transaction...' });
-        const mintFn = immutable ? buildImmutableMintTx : buildMintTx;
+        setTxState({ status: 'building', message: 'Building mint transaction...' });
         const tx = await mintFn(signer, finalMime, description.trim(), content);
-        setTxState({ status: 'signing' });
-        const txHash = await signer.sendTransaction(tx);
-        setTxState({ status: 'success', txHash });
+        const summary = await summarizeTx(tx, client, walletLock);
+
+        setTxState({ status: 'idle' });
+        setPendingSign({
+          action: immutable ? 'Immutable Mint (inline)' : 'Mint (inline)',
+          tx,
+          summary,
+          extraInfo: [
+            { label: 'Content type', value: finalMime },
+            { label: 'Content size', value: `${content.length} bytes` },
+            { label: 'Description', value: description.trim() },
+          ],
+        });
       }
-      // Reset form
+      return; // rest of flow continues in proceedSign when user confirms
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      const dbg = (window as unknown as { __CKBFS_DEBUG__?: string }).__CKBFS_DEBUG__;
+      const full = dbg && !msg.includes('[') ? `${msg} [ckbfs:${dbg}]` : msg;
+      setTxState({ status: 'error', message: full });
+    }
+  }
+
+  async function proceedSign() {
+    if (!signer || !pendingSign) return;
+    const { tx } = pendingSign;
+    setPendingSign(null);
+    try {
+      setTxState({ status: 'signing' });
+      const txHash = await safeSendTransaction(signer, tx, (msg) => setTxState({ status: 'building', message: msg }));
+      setTxState({ status: 'success', txHash });
+      // Reset form on success
       setRawContent(new Uint8Array());
       setProcessedContent(new Uint8Array());
       setDescription('');
@@ -168,10 +219,13 @@ export function Mint() {
       setFileName('');
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
-      const dbg = (window as unknown as { __CKBFS_DEBUG__?: string }).__CKBFS_DEBUG__;
-      const full = dbg && !msg.includes('[') ? `${msg} [ckbfs:${dbg}]` : msg;
-      setTxState({ status: 'error', message: full });
+      setTxState({ status: 'error', message: msg });
     }
+  }
+
+  function cancelSign() {
+    setPendingSign(null);
+    setTxState({ status: 'idle' });
   }
 
   return (
@@ -446,6 +500,17 @@ export function Mint() {
       )}
 
       <TxStatus state={txState} onClose={() => setTxState({ status: 'idle' })} />
+
+      {pendingSign && walletLock && (
+        <TxConfirmModal
+          action={pendingSign.action}
+          summary={pendingSign.summary}
+          userLock={walletLock}
+          extraInfo={pendingSign.extraInfo}
+          onConfirm={proceedSign}
+          onCancel={cancelSign}
+        />
+      )}
     </div>
   );
 }
