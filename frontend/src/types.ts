@@ -14,6 +14,9 @@ export interface DecodedLsdlArgs {
   creatorLockHash: Uint8Array;
   royaltyBps: number;
   expiryEpoch: bigint;
+  // Legacy listings have an extra 4-byte length prefix the LSDL contract
+  // rejects at spend time (error 20). The cells are permanently unspendable.
+  isLegacy: boolean;
 }
 
 /** A listed item = MarketItem content + LSDL sale terms + cell reference */

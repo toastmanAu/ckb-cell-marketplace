@@ -144,12 +144,21 @@ export function ItemDetail() {
         )}
       </div>
 
-      {isListed && signer && !isOwner && (
+      {isListed && lsdlArgs?.isLegacy && (
+        <div className="card" style={{ marginBottom: '1rem', border: '1px solid var(--warning, #a86a00)', background: 'rgba(168, 106, 0, 0.08)' }}>
+          <div style={{ fontSize: '0.9rem', fontWeight: 600, marginBottom: '0.25rem' }}>* Locked legacy script</div>
+          <div style={{ fontSize: '0.82rem', color: 'var(--muted)', lineHeight: 1.4 }}>
+            This listing was encoded before the args layout was corrected. The LSDL contract rejects it at spend time, so it cannot be bought or cancelled. The capacity is permanently locked.
+          </div>
+        </div>
+      )}
+
+      {isListed && signer && !isOwner && !lsdlArgs?.isLegacy && (
         <button className="btn btn-buy" onClick={handleBuy} style={{ width: '100%', padding: '0.8rem', fontSize: '1rem' }}>
           Buy for {shannonsToCkb(lsdlArgs!.totalValue)} CKB
         </button>
       )}
-      {isListed && signer && isOwner && (
+      {isListed && signer && isOwner && !lsdlArgs?.isLegacy && (
         <button className="btn btn-danger" onClick={handleCancel} style={{ width: '100%', padding: '0.8rem' }}>
           Cancel Listing
         </button>

@@ -175,6 +175,9 @@ export async function buildBuyTx(
 ): Promise<ccc.Transaction> {
   const buyerLock = (await signer.getRecommendedAddressObj()).script;
   const lsdlArgs = decodeLsdlArgs(ccc.hexFrom(listingCell.cellOutput.lock.args));
+  if (lsdlArgs.isLegacy) {
+    throw new Error('This listing uses an outdated encoding and is permanently locked by the contract. It cannot be bought.');
+  }
   const { ownerLock, totalValue, creatorLockHash, royaltyBps } = lsdlArgs;
 
   // Calculate royalty split
@@ -231,7 +234,11 @@ export async function buildCancelTx(
   signer: ccc.Signer,
   listingCell: ccc.Cell,
 ): Promise<ccc.Transaction> {
-  const ownerLock = decodeLsdlArgs(ccc.hexFrom(listingCell.cellOutput.lock.args)).ownerLock;
+  const decoded = decodeLsdlArgs(ccc.hexFrom(listingCell.cellOutput.lock.args));
+  if (decoded.isLegacy) {
+    throw new Error('This listing uses an outdated encoding and is permanently locked by the contract. It cannot be cancelled.');
+  }
+  const ownerLock = decoded.ownerLock;
 
   const tx = ccc.Transaction.from({
     inputs: [{ previousOutput: listingCell.outPoint }],

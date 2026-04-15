@@ -74,6 +74,15 @@ export function decodeMarketItem(data: Uint8Array): MarketItem {
 
 // ── LSDL args encoding/decoding ─────────────────────
 
+// LSDL args layout the contract expects (helper.rs:33-42):
+//   [0..4]                 u32 LE — owner_lock molecule size (Script's own header)
+//   [0..owner_size]        Script molecule (self-inclusive)
+//   [owner_size..+16]      u128 BE total_value
+//   [owner_size+16..+20]   [u8; 20] creator_lock_hash
+//   [owner_size+36..+2]    u16 BE royalty_bps
+//   [owner_size+38..+8]    u64 BE expiry_epoch
+// The molecule's own 4-byte size header serves as owner_size — any extra
+// prefix breaks Script::from_slice and triggers LockArgsInvalid (error 20).
 export function encodeLsdlArgs(args: {
   ownerLock: ccc.Script;
   totalValue: bigint;
@@ -83,67 +92,72 @@ export function encodeLsdlArgs(args: {
 }): Uint8Array {
   const lockBytes = args.ownerLock.toBytes();
   const lockLen = lockBytes.length;
-  const totalLen = 4 + lockLen + 16 + 20 + 2 + 8;
+  const totalLen = lockLen + 16 + 20 + 2 + 8;
 
   const buf = new ArrayBuffer(totalLen);
   const view = new DataView(buf);
   const bytes = new Uint8Array(buf);
-  let off = 0;
 
-  // owner_lock size prefix (4 bytes LE)
-  view.setUint32(off, lockLen, true); off += 4;
+  bytes.set(lockBytes, 0);
+  let off = lockLen;
 
-  // owner_lock Script molecule bytes
-  bytes.set(lockBytes, off); off += lockLen;
-
-  // total_value (16 bytes BE u128)
   const hi = args.totalValue >> 64n;
   const lo = args.totalValue & ((1n << 64n) - 1n);
   view.setBigUint64(off, hi, false); off += 8;
   view.setBigUint64(off, lo, false); off += 8;
 
-  // creator_lock_hash (20 bytes)
   bytes.set(args.creatorLockHash, off); off += 20;
 
-  // royalty_bps (2 bytes BE u16)
   view.setUint16(off, args.royaltyBps, false); off += 2;
 
-  // expiry_epoch (8 bytes BE u64)
   view.setBigUint64(off, args.expiryEpoch, false);
 
   return bytes;
 }
 
+// Decodes both the contract-correct layout (Script at offset 0) and the
+// legacy broken layout (redundant 4-byte prefix, Script at offset 4).
+// bytes[0..4] is the lockLen in both layouts — in the new layout it's the
+// molecule's own size header; in the legacy layout it's our explicit prefix
+// whose value happens to equal the molecule size. The layouts differ only
+// in total length: new = lockLen + 46, legacy = lockLen + 50.
 export function decodeLsdlArgs(argsHex: string): DecodedLsdlArgs {
   const hex = argsHex.startsWith('0x') ? argsHex.slice(2) : argsHex;
   const data = new Uint8Array(hex.match(/.{2}/g)!.map(b => parseInt(b, 16)));
   const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
-  let off = 0;
 
-  // owner_lock size
-  const lockLen = view.getUint32(off, true); off += 4;
+  const lockLen = view.getUint32(0, true);
+  const TAIL = 46;
 
-  // owner_lock Script molecule
-  const lockBytes = data.subarray(off, off + lockLen);
+  let scriptStart: number;
+  let isLegacy: boolean;
+  if (data.length === lockLen + TAIL) {
+    scriptStart = 0;
+    isLegacy = false;
+  } else if (data.length === lockLen + 4 + TAIL) {
+    scriptStart = 4;
+    isLegacy = true;
+  } else {
+    throw new Error(
+      `LSDL args length ${data.length} matches neither layout (expected ${lockLen + TAIL} or ${lockLen + 4 + TAIL})`
+    );
+  }
+
+  const lockBytes = data.subarray(scriptStart, scriptStart + lockLen);
   const ownerLock = ccc.Script.fromBytes(lockBytes);
-  off += lockLen;
+  let off = scriptStart + lockLen;
 
-  // total_value (16 bytes BE u128)
   const hi = view.getBigUint64(off, false); off += 8;
   const lo = view.getBigUint64(off, false); off += 8;
   const totalValue = (hi << 64n) | lo;
 
-  // creator_lock_hash (20 bytes)
   const creatorLockHash = new Uint8Array(data.subarray(off, off + 20));
   off += 20;
 
-  // royalty_bps (2 bytes BE u16)
   const royaltyBps = view.getUint16(off, false); off += 2;
-
-  // expiry_epoch (8 bytes BE u64)
   const expiryEpoch = view.getBigUint64(off, false);
 
-  return { ownerLock, totalValue, creatorLockHash, royaltyBps, expiryEpoch };
+  return { ownerLock, totalValue, creatorLockHash, royaltyBps, expiryEpoch, isLegacy };
 }
 
 // ── Helpers ─────────────────────────────────────────
