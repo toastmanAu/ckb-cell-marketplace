@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { ccc } from '@ckb-ccc/connector-react';
 import { ContentRenderer } from './ContentRenderer';
+import { ReportButton } from './ReportButton';
 import { categoriseContent, categoryLabel, badgeClass } from '../lib/content';
 import { shannonsToCkb } from '../lib/codec';
 import type { ListingInfo } from '../types';
@@ -42,6 +43,15 @@ export function ItemCard({ listing }: ItemCardProps) {
             {(lsdlArgs.royaltyBps / 100).toFixed(1)}% royalty
           </div>
         )}
+        <div style={{ marginTop: '0.5rem', display: 'flex', justifyContent: 'flex-end' }}>
+          <ReportButton
+            outPoint={outPoint}
+            creatorLockHash={ccc.hexFrom(lsdlArgs.creatorLockHash)}
+            contentType={marketItem.contentType}
+            description={marketItem.description}
+            variant="icon"
+          />
+        </div>
       </div>
     </Link>
   );

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useCcc, ccc } from '@ckb-ccc/connector-react';
 import { ContentRenderer } from './ContentRenderer';
+import { ReportButton } from './ReportButton';
 import { TxStatus } from './TxStatus';
 import { createClient, fetchCell } from '../lib/indexer';
 import { decodeMarketItem, decodeLsdlArgs, shannonsToCkb } from '../lib/codec';
@@ -170,6 +171,17 @@ export function ItemDetail() {
       )}
 
       <TxStatus state={txState} onClose={() => setTxState({ status: 'idle' })} />
+
+      {cell && (
+        <div style={{ marginTop: '1.25rem', display: 'flex', justifyContent: 'center' }}>
+          <ReportButton
+            outPoint={cell.outPoint}
+            creatorLockHash={lsdlArgs ? ccc.hexFrom(lsdlArgs.creatorLockHash) : undefined}
+            contentType={marketItem.contentType}
+            description={marketItem.description}
+          />
+        </div>
+      )}
     </div>
   );
 }

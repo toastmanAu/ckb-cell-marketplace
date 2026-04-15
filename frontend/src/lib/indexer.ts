@@ -1,6 +1,7 @@
 import { ccc } from '@ckb-ccc/connector-react';
 import { MARKET_ITEM_TYPE, LSDL } from '../config';
 import { decodeMarketItem, decodeLsdlArgs } from './codec';
+import { isCreatorBlocked, isOutpointBlocked } from '../moderation';
 import type { ListingInfo, OwnedItem } from '../types';
 
 /** Create a CCC testnet client for indexer queries */
@@ -41,10 +42,13 @@ export async function fetchListings(client: ccc.Client): Promise<ListingInfo[]> 
       const data = cell.outputData;
       if (!data || data.length === 0) continue;
 
-      // outputData is a Hex string — convert to bytes before decoding
+      if (isOutpointBlocked(cell.outPoint)) continue;
+
       const dataBytes = ccc.bytesFrom(data);
       const marketItem = decodeMarketItem(dataBytes);
       const lsdlArgs = decodeLsdlArgs(ccc.hexFrom(cell.cellOutput.lock.args));
+
+      if (isCreatorBlocked(lsdlArgs.creatorLockHash)) continue;
 
       listings.push({
         outPoint: cell.outPoint,
@@ -80,10 +84,15 @@ export async function fetchOwnedItems(
     100,
   );
 
+  // Owner's own items: we don't hide-by-creator (it's their own wallet) but we
+  // still hide specific outpoints flagged via report. They can still see them
+  // exist in the explorer; we just don't render them on the site.
   for await (const cell of iter) {
     try {
       const data = cell.outputData;
       if (!data || data.length === 0) continue;
+
+      if (isOutpointBlocked(cell.outPoint)) continue;
 
       const dataBytes = ccc.bytesFrom(data);
       const marketItem = decodeMarketItem(dataBytes);

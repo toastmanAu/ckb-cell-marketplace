@@ -20,6 +20,9 @@ export function Layout() {
             <NavLink to="/my-items" className={({ isActive }) => `nav-tab ${isActive ? 'active' : ''}`}>
               My Cells
             </NavLink>
+            <NavLink to="/rules" className={({ isActive }) => `nav-tab ${isActive ? 'active' : ''}`}>
+              Rules
+            </NavLink>
           </nav>
           <WalletButton />
         </div>
@@ -30,6 +33,7 @@ export function Layout() {
       <footer className="footer">
         <span>CellSwap — built on Nervos CKB</span>
         <div className="footer-links">
+          <NavLink to="/rules">Rules</NavLink>
           <a href="https://github.com/toastmanAu/ckb-cell-marketplace" target="_blank" rel="noreferrer">GitHub</a>
           <a href="https://docs.nervos.org" target="_blank" rel="noreferrer">CKB Docs</a>
           <a href="https://testnet.explorer.nervos.org" target="_blank" rel="noreferrer">Explorer</a>

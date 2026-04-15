@@ -5,6 +5,7 @@ import { Browse } from './components/Browse';
 import { ItemDetail } from './components/ItemDetail';
 import { Mint } from './components/Mint';
 import { MyItems } from './components/MyItems';
+import { Rules } from './components/Rules';
 
 export default function App() {
   return (
@@ -16,6 +17,7 @@ export default function App() {
             <Route path="/item/:outpoint" element={<ItemDetail />} />
             <Route path="/mint" element={<Mint />} />
             <Route path="/my-items" element={<MyItems />} />
+            <Route path="/rules" element={<Rules />} />
             <Route path="*" element={<Navigate to="/browse" replace />} />
           </Route>
         </Routes>

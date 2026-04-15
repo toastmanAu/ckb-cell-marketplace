@@ -1,10 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
-import { useCcc } from '@ckb-ccc/connector-react';
+import { Link } from 'react-router-dom';
+import { useCcc, ccc } from '@ckb-ccc/connector-react';
 import { ContentRenderer } from './ContentRenderer';
 import { TxStatus } from './TxStatus';
 import { buildMintTx, buildImmutableMintTx } from '../lib/transactions';
 import { processImage, isProcessableImage, formatBytes, type ImageProcessOptions } from '../lib/image';
 import { publishToCkbfs, estimateCkbfsCost } from '../lib/ckbfs';
+import { isWalletBlocked, getBlockedWalletReason } from '../moderation';
 import type { TxState, MarketItem } from '../types';
 
 const MIME_OPTIONS = [
@@ -24,6 +26,15 @@ export function Mint() {
   const { signerInfo } = useCcc();
   const signer = signerInfo?.signer;
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Resolve connected wallet's lock once per session — used to gate minting.
+  const [walletLock, setWalletLock] = useState<ccc.Script | null>(null);
+  useEffect(() => {
+    if (!signer) { setWalletLock(null); return; }
+    signer.getRecommendedAddressObj().then(a => setWalletLock(a.script)).catch(() => setWalletLock(null));
+  }, [signer]);
+  const walletBlocked = walletLock ? isWalletBlocked(walletLock) : false;
+  const blockReason = walletLock ? getBlockedWalletReason(walletLock) : null;
 
   const [contentType, setContentType] = useState('text/plain');
   const [description, setDescription] = useState('');
@@ -114,7 +125,7 @@ export function Mint() {
     ? { contentType: finalMime, description: description || '(no description)', content }
     : null;
 
-  const canMint = signer && content.length > 0 && description.trim().length > 0 && finalMime.length > 0 && !processing;
+  const canMint = signer && content.length > 0 && description.trim().length > 0 && finalMime.length > 0 && !processing && !walletBlocked;
 
   // Inline cost estimate
   const inlineCostCkb = Math.ceil(content.length * 2.2 / 100) + 300;
@@ -122,6 +133,10 @@ export function Mint() {
 
   async function handleMint() {
     if (!signer || !canMint) return;
+    if (walletBlocked) {
+      setTxState({ status: 'error', message: `This wallet is restricted from minting on CellSwap (${blockReason ?? 'see Rules'}).` });
+      return;
+    }
     try {
       if (storageMode === 'ckbfs') {
         // CKBFS flow: publish content to CKBFS, then mint MarketItem with URI reference
@@ -169,7 +184,25 @@ export function Mint() {
         </div>
       )}
 
-      {signer && (
+      {signer && walletBlocked && (
+        <div className="card" style={{ marginBottom: '1rem', border: '1px solid var(--danger, #c22)', background: 'rgba(192, 32, 32, 0.08)' }}>
+          <div style={{ fontWeight: 600, marginBottom: '0.3rem' }}>This wallet is restricted from minting</div>
+          <div style={{ fontSize: '0.85rem', color: 'var(--muted)', lineHeight: 1.4, marginBottom: '0.5rem' }}>
+            Reason: {blockReason ?? 'see the Rules page'}.
+          </div>
+          <div style={{ fontSize: '0.82rem' }}>
+            See the <Link to="/rules">Rules</Link> page for the full policy and appeal process.
+          </div>
+        </div>
+      )}
+
+      {signer && !walletBlocked && (
+        <div className="card" style={{ marginBottom: '1rem', fontSize: '0.82rem', color: 'var(--muted)', lineHeight: 1.45 }}>
+          Cells are permanent on chain — you cannot delete them after minting. By minting you confirm the content does not violate the <Link to="/rules">Rules</Link>. CellSwap reserves the right to hide content and restrict wallets from this interface.
+        </div>
+      )}
+
+      {signer && !walletBlocked && (
         <>
           <div className="card" style={{ marginBottom: '1rem' }}>
             {/* Content type */}
