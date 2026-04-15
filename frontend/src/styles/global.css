@@ -89,6 +89,64 @@ code, .mono {
   background: var(--surface);
 }
 
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.nav-burger {
+  display: none;
+  background: transparent;
+  border: 1px solid var(--border, #333);
+  border-radius: 6px;
+  padding: 0.4rem 0.55rem;
+  cursor: pointer;
+  flex-direction: column;
+  gap: 4px;
+  width: 38px;
+  height: 34px;
+  justify-content: center;
+  align-items: center;
+}
+
+.nav-burger span {
+  display: block;
+  width: 18px;
+  height: 2px;
+  background: var(--text, #eee);
+  border-radius: 1px;
+}
+
+.nav-drawer-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 90;
+  backdrop-filter: blur(2px);
+}
+
+.nav-drawer {
+  position: fixed;
+  top: 60px;
+  right: -300px;
+  width: 260px;
+  max-width: 82vw;
+  bottom: 0;
+  background: rgba(12, 14, 20, 0.98);
+  border-left: 1px solid var(--border, #333);
+  z-index: 100;
+  transition: right 0.22s ease;
+  overflow-y: auto;
+}
+
+.nav-drawer.open { right: 0; }
+
+.nav-tab-drawer {
+  padding: 0.7rem 1rem;
+  font-size: 0.95rem;
+}
+
 .main {
   max-width: 1200px;
   margin: 0 auto;
@@ -445,10 +503,18 @@ code, .mono {
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 0.8rem;
-  overflow-x: auto;
   margin: 0.8em 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
-.markdown-body pre code { background: none; padding: 0; }
+.markdown-body pre code {
+  background: none;
+  padding: 0;
+  white-space: inherit;
+  word-break: inherit;
+}
+.markdown-body table { display: block; overflow-x: auto; max-width: 100%; }
 .markdown-body blockquote {
   border-left: 3px solid var(--accent);
   padding-left: 1rem;
@@ -470,8 +536,8 @@ code, .mono {
 
 @media (max-width: 768px) {
   .header-inner { padding: 0 1rem; }
-  .nav-tabs { gap: 0; }
-  .nav-tab { padding: 0.4rem 0.6rem; font-size: 0.8rem; }
+  .nav-tabs-desktop { display: none; }
+  .nav-burger { display: flex; }
   .main { padding: 1rem; }
   .items-grid { grid-template-columns: 1fr; }
   .list-row { grid-template-columns: 1fr auto; }

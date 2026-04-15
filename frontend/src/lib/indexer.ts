@@ -110,6 +110,64 @@ export async function fetchOwnedItems(
   return items;
 }
 
+// Immutable mints use a dead lock (all-zero codeHash, data1 hashType) — the
+// cell can never be spent, so the content is permanent. This is the basis
+// for the CKB Library: immutable markdown cells become public documents.
+const DEAD_LOCK_CODE_HASH = '0x0000000000000000000000000000000000000000000000000000000000000000';
+
+/** Fetch immutable MarketItem cells intended for the Library view (markdown only) */
+export async function fetchLibraryDocs(client: ccc.Client): Promise<OwnedItem[]> {
+  const docs: OwnedItem[] = [];
+
+  const iter = client.findCells(
+    {
+      script: {
+        codeHash: DEAD_LOCK_CODE_HASH,
+        hashType: 'data1',
+        args: '0x',
+      },
+      scriptType: 'lock',
+      scriptSearchMode: 'exact',
+      filter: {
+        script: {
+          codeHash: MARKET_ITEM_TYPE.TYPE_ID,
+          hashType: 'type',
+          args: '0x',
+        },
+      },
+      withData: true,
+    },
+    'desc',
+    200,
+  );
+
+  for await (const cell of iter) {
+    try {
+      const data = cell.outputData;
+      if (!data || data.length === 0) continue;
+
+      if (isOutpointBlocked(cell.outPoint)) continue;
+
+      const dataBytes = ccc.bytesFrom(data);
+      const marketItem = decodeMarketItem(dataBytes);
+
+      // Library filter: markdown only. Other mime types can live on chain but
+      // are shown in the main browse/examine view, not the library.
+      if (!marketItem.contentType.startsWith('text/markdown')) continue;
+
+      docs.push({
+        outPoint: cell.outPoint,
+        capacity: cell.cellOutput.capacity,
+        marketItem,
+      });
+    } catch {
+      // Skip malformed
+    }
+  }
+
+  return docs;
+}
+
 /** Fetch items listed by a specific user (LSDL-locked, owner matches) */
 export async function fetchMyListings(
   client: ccc.Client,

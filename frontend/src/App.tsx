@@ -6,6 +6,7 @@ import { ItemDetail } from './components/ItemDetail';
 import { Mint } from './components/Mint';
 import { MyItems } from './components/MyItems';
 import { Rules } from './components/Rules';
+import { Library } from './components/Library';
 
 export default function App() {
   return (
@@ -18,6 +19,7 @@ export default function App() {
             <Route path="/mint" element={<Mint />} />
             <Route path="/my-items" element={<MyItems />} />
             <Route path="/rules" element={<Rules />} />
+            <Route path="/library" element={<Library />} />
             <Route path="*" element={<Navigate to="/browse" replace />} />
           </Route>
         </Routes>
