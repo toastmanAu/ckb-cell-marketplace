@@ -9,7 +9,7 @@ compatibility_date = "2026-04-15"
 # acceptable and exact tallies are not meaningful.
 [[kv_namespaces]]
 binding = "VIEWS"
-id = "TODO_CREATE_VIA_WRANGLER_OR_DASHBOARD"
+id = "b6f408d82b804714bf4d2bc3f23d3ed2"
 
 # Routes: bind to cellswap.xyz/api/* once DNS is on CF. Until then the
 # worker lives at cellswap-api.<account>.workers.dev and the frontend

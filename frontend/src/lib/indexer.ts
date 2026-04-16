@@ -34,7 +34,7 @@ export async function fetchListings(client: ccc.Client): Promise<ListingInfo[]> 
       withData: true,
     },
     'desc',
-    100,
+    500,
   );
 
   for await (const cell of iter) {

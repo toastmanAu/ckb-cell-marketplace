@@ -28,19 +28,34 @@ export async function recordView(outPoint: ccc.OutPointLike): Promise<void> {
   }
 }
 
+// Worker caps each /api/counts call at 200 outpoints; chunk larger sets
+// so the Browse page's full result set (up to 500) still resolves.
+const COUNTS_BATCH_SIZE = 200;
+
 export async function fetchViewCounts(
   outPoints: readonly ccc.OutPointLike[],
 ): Promise<Record<string, number>> {
   if (outPoints.length === 0) return {};
+  const ids = outPoints.map(outpointId);
+  const batches: string[][] = [];
+  for (let i = 0; i < ids.length; i += COUNTS_BATCH_SIZE) {
+    batches.push(ids.slice(i, i + COUNTS_BATCH_SIZE));
+  }
+
   try {
-    const res = await fetch(`${API_BASE}/api/counts`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ outpoints: outPoints.map(outpointId) }),
-    });
-    if (!res.ok) return {};
-    const data = (await res.json()) as { counts?: Record<string, number> };
-    return data.counts ?? {};
+    const results = await Promise.all(
+      batches.map(async (batch) => {
+        const res = await fetch(`${API_BASE}/api/counts`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ outpoints: batch }),
+        });
+        if (!res.ok) return {} as Record<string, number>;
+        const data = (await res.json()) as { counts?: Record<string, number> };
+        return data.counts ?? {};
+      }),
+    );
+    return Object.assign({}, ...results);
   } catch {
     return {};
   }

@@ -85,6 +85,8 @@ export function Browse() {
   const { prefs, setPref } = usePrefs(address);
   const [search, setSearch] = useState('');
   const [viewCounts, setViewCounts] = useState<Record<string, number>>({});
+  const [visibleCount, setVisibleCount] = useState(24);
+  const PAGE_SIZE = 24;
 
   // Batch-fetch view counts for the listings on screen. Worker is
   // best-effort — if unreachable, counts stay empty and Most-viewed sort
@@ -102,6 +104,16 @@ export function Browse() {
     () => applySort(applySearch(listings, search), prefs.sortOrder, viewCounts),
     [listings, search, prefs.sortOrder, viewCounts],
   );
+
+  // Reset page slice when the filter/sort criteria change, so the user sees
+  // the top of the new result set rather than whatever page position they
+  // had in the previous one.
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [search, prefs.sortOrder]);
+
+  const paginated = visible.slice(0, visibleCount);
+  const canLoadMore = visibleCount < visible.length;
 
   return (
     <div>
@@ -190,7 +202,7 @@ export function Browse() {
 
       {!loading && visible.length > 0 && prefs.viewMode === 'gallery' && (
         <div className="items-grid">
-          {visible.map(listing => (
+          {paginated.map(listing => (
             <ItemCard
               key={outpointId(listing.outPoint)}
               listing={listing}
@@ -202,7 +214,7 @@ export function Browse() {
 
       {!loading && visible.length > 0 && prefs.viewMode === 'list' && (
         <div className="items-list">
-          {visible.map(listing => {
+          {paginated.map(listing => {
             const outPointId = `${ccc.hexFrom(listing.outPoint.txHash)}:${listing.outPoint.index}`;
             return (
               <Link key={outPointId} to={`/item/${encodeURIComponent(outPointId)}`} style={{ textDecoration: 'none' }}>
@@ -222,6 +234,22 @@ export function Browse() {
               </Link>
             );
           })}
+        </div>
+      )}
+
+      {!loading && canLoadMore && (
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1.5rem' }}>
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={() => setVisibleCount((n) => n + PAGE_SIZE)}
+            style={{ padding: '0.6rem 1.4rem', fontSize: '0.9rem' }}
+          >
+            Load {Math.min(PAGE_SIZE, visible.length - visibleCount)} more ·
+            <span style={{ color: 'var(--muted)', marginLeft: '0.4rem' }}>
+              {visibleCount}/{visible.length}
+            </span>
+          </button>
         </div>
       )}
     </div>
