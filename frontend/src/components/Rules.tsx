@@ -44,6 +44,24 @@ export function Rules() {
       </section>
 
       <section style={{ marginBottom: '2rem' }}>
+        <h2 style={{ fontSize: '1.15rem', marginBottom: '0.5rem' }}>Rendering &amp; Security</h2>
+        <p style={{ lineHeight: 1.6, marginBottom: '0.6rem' }}>
+          Cell contents are rendered client-side in your browser, with content-type-specific isolation:
+        </p>
+        <ul style={{ lineHeight: 1.6, paddingLeft: '1.2rem' }}>
+          <li><strong>Images (PNG, JPEG, WebP, GIF):</strong> rendered via <code>&lt;img&gt;</code>. Inert — cannot execute code.</li>
+          <li><strong>SVG:</strong> also rendered via <code>&lt;img&gt;</code>, which per the web platform disables all scripts and event handlers inside the SVG. An SVG cell containing <code>&lt;script&gt;</code> or <code>onclick</code> handlers will show the image but not execute them here. Do not refactor to inline-SVG rendering without equivalent sandboxing.</li>
+          <li><strong>Text / Markdown:</strong> markdown is parsed with <code>marked</code> then sanitized with <code>DOMPurify</code> before insertion into the DOM.</li>
+          <li><strong>HTML:</strong> rendered inside an <code>&lt;iframe&gt;</code> with <code>sandbox="allow-scripts"</code> and no <code>allow-same-origin</code>. Scripts run in a null-origin context and cannot access cellswap's cookies, localStorage, parent DOM, or any cellswap-origin APIs. They cannot navigate the parent page. A malicious HTML cell can render whatever it likes inside the frame but cannot exfiltrate data from or phish against cellswap itself.</li>
+          <li><strong>PDF:</strong> rendered in an <code>&lt;iframe&gt;</code> via the browser's built-in PDF viewer. JavaScript inside the PDF is handled per the browser's native PDF security model (stripped or isolated by Chrome's PDFium, Firefox's pdf.js, etc.).</li>
+          <li><strong>JSON / other data:</strong> displayed as pretty-printed text. Inert.</li>
+        </ul>
+        <p style={{ lineHeight: 1.6, marginTop: '0.6rem' }}>
+          Blocked cells (see moderation above) are not rendered at all — their content never loads in your browser.
+        </p>
+      </section>
+
+      <section style={{ marginBottom: '2rem' }}>
         <h2 style={{ fontSize: '1.15rem', marginBottom: '0.5rem' }}>Appeals</h2>
         <p style={{ lineHeight: 1.6 }}>
           If your wallet was blocked and you believe it was in error, contact the operator with the wallet args and a short explanation. The blocklist lives in the public source repository — anyone can audit who has been blocked and why.

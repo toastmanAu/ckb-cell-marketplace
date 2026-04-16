@@ -3,6 +3,7 @@ import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { categoriseContent, contentToDataUrl, contentToString } from '../lib/content';
 import { resolveCkbfsContent } from '../lib/ckbfs-resolver';
+import { HtmlFullscreenViewer } from './HtmlFullscreenViewer';
 import type { MarketItem } from '../types';
 
 interface ContentRendererProps {
@@ -176,6 +177,7 @@ function MarkdownViewer({ markdown }: { markdown: string }) {
 export function ContentRenderer({ item, mode }: ContentRendererProps) {
   const category = categoriseContent(item.contentType);
   const isPreview = mode === 'preview';
+  const [htmlFullscreen, setHtmlFullscreen] = useState(false);
 
   // Handle CKBFS references — resolve and render actual content from chain
   if (isCkbfsRef(item.content)) {
@@ -184,6 +186,14 @@ export function ContentRenderer({ item, mode }: ContentRendererProps) {
   }
 
   if (category === 'image') {
+    // SVG security note: SVG can contain <script> and on* handlers, which
+    // execute when the SVG is loaded inline via <svg>…</svg> or via <object>
+    // / <embed>. However, SVGs loaded as the src of an <img> tag are
+    // rendered in a non-interactive, script-disabled mode by every major
+    // browser — this is a web platform invariant, not a browser quirk. So
+    // routing image/svg+xml through <img> is the safe rendering path and
+    // we explicitly rely on that here. Do NOT refactor this to inline SVG
+    // or <object> without adding equivalent sandboxing.
     const url = contentToDataUrl(item.content, item.contentType);
     return (
       <img
@@ -316,18 +326,46 @@ export function ContentRenderer({ item, mode }: ContentRendererProps) {
     // the HTML won't resolve, and the embedded script can't talk to any
     // cellswap context — intended for self-contained static HTML only.
     return (
-      <iframe
-        src={dataUrl}
-        title={item.description}
-        sandbox="allow-scripts"
-        style={{
-          width: '100%',
-          height: '400px',
-          border: '1px solid var(--border)',
-          borderRadius: '8px',
-          background: '#fff',
-        }}
-      />
+      <>
+        <div style={{ position: 'relative' }}>
+          <iframe
+            src={dataUrl}
+            title={item.description}
+            sandbox="allow-scripts"
+            style={{
+              width: '100%',
+              height: '400px',
+              border: '1px solid var(--border)',
+              borderRadius: '8px',
+              background: '#fff',
+              display: 'block',
+            }}
+          />
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={() => setHtmlFullscreen(true)}
+            style={{
+              position: 'absolute',
+              top: '0.5rem',
+              right: '0.5rem',
+              padding: '0.3rem 0.6rem',
+              fontSize: '0.75rem',
+              background: 'rgba(8, 10, 15, 0.8)',
+              backdropFilter: 'blur(4px)',
+            }}
+          >
+            View fullscreen
+          </button>
+        </div>
+        {htmlFullscreen && (
+          <HtmlFullscreenViewer
+            dataUrl={dataUrl}
+            title={item.description}
+            onClose={() => setHtmlFullscreen(false)}
+          />
+        )}
+      </>
     );
   }
 
