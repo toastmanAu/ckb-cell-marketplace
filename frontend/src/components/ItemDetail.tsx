@@ -10,6 +10,7 @@ import { categoriseContent, categoryLabel, badgeClass, shortAddress } from '../l
 import { buildBuyTx, buildCancelTx } from '../lib/transactions';
 import { safeSendTransaction } from '../lib/tx-send';
 import { summarizeTx, type TxSummary } from '../lib/tx-summary';
+import { recordView } from '../lib/analytics';
 import { TxConfirmModal } from './TxConfirmModal';
 import { LSDL } from '../config';
 import type { TxState, MarketItem, DecodedLsdlArgs } from '../types';
@@ -52,6 +53,8 @@ export function ItemDetail() {
     fetchCell(client, { txHash, index }).then(c => {
       if (!c) { setError('Cell not found — it may have been purchased or cancelled.'); return; }
       setCell(c);
+      // Fire-and-forget view record. No await — never block the UI render.
+      void recordView(c.outPoint);
 
       const dataBytes = ccc.bytesFrom(c.outputData);
       setMarketItem(decodeMarketItem(dataBytes));

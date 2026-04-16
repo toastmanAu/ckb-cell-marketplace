@@ -1,0 +1,14 @@
+{
+  "name": "cellswap-api",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250415.0",
+    "typescript": "^5.4.0",
+    "wrangler": "^4.81.0"
+  }
+}

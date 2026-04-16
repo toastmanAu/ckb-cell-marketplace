@@ -6,18 +6,28 @@ import { shannonsToCkb } from '../lib/codec';
 import { categoriseContent, categoryLabel, badgeClass } from '../lib/content';
 import { ccc, useCcc } from '@ckb-ccc/connector-react';
 import { Link } from 'react-router-dom';
+import { fetchViewCounts } from '../lib/analytics';
 import type { ListingInfo } from '../types';
 
 const SORT_OPTIONS: Array<{ value: SortOrder; label: string }> = [
   { value: 'newest', label: 'Newest first' },
   { value: 'oldest', label: 'Oldest first' },
+  { value: 'most-viewed', label: 'Most viewed' },
   { value: 'price-low', label: 'Price: low to high' },
   { value: 'price-high', label: 'Price: high to low' },
   { value: 'az', label: 'A → Z' },
   { value: 'za', label: 'Z → A' },
 ];
 
-function applySort(items: ListingInfo[], order: SortOrder): ListingInfo[] {
+function outpointId(outPoint: ccc.OutPointLike): string {
+  return `${ccc.hexFrom(outPoint.txHash)}:${Number(outPoint.index)}`;
+}
+
+function applySort(
+  items: ListingInfo[],
+  order: SortOrder,
+  viewCounts: Record<string, number>,
+): ListingInfo[] {
   // The CCC indexer returns listings in ascending block/tx order, so the
   // raw array is oldest-first. We reverse for 'newest' and leave as-is for
   // 'oldest'. Using array position as the age proxy avoids an extra RPC
@@ -34,6 +44,15 @@ function applySort(items: ListingInfo[], order: SortOrder): ListingInfo[] {
       return copy.sort((a, b) => Number(a.lsdlArgs.totalValue - b.lsdlArgs.totalValue));
     case 'price-high':
       return copy.sort((a, b) => Number(b.lsdlArgs.totalValue - a.lsdlArgs.totalValue));
+    case 'most-viewed':
+      return copy.sort((a, b) => {
+        const ca = viewCounts[outpointId(a.outPoint)] ?? 0;
+        const cb = viewCounts[outpointId(b.outPoint)] ?? 0;
+        // Tie-break on newest: higher raw-array index (=newer in asc order)
+        // first so cards with 0 views still surface recent mints.
+        if (cb !== ca) return cb - ca;
+        return items.indexOf(b) - items.indexOf(a);
+      });
     default:
       return copy;
   }
@@ -65,10 +84,23 @@ export function Browse() {
 
   const { prefs, setPref } = usePrefs(address);
   const [search, setSearch] = useState('');
+  const [viewCounts, setViewCounts] = useState<Record<string, number>>({});
+
+  // Batch-fetch view counts for the listings on screen. Worker is
+  // best-effort — if unreachable, counts stay empty and Most-viewed sort
+  // degrades into newest-first (all 0s → tie-break on newness).
+  useEffect(() => {
+    if (listings.length === 0) return;
+    let cancelled = false;
+    fetchViewCounts(listings.map((l) => l.outPoint)).then((c) => {
+      if (!cancelled) setViewCounts(c);
+    });
+    return () => { cancelled = true; };
+  }, [listings]);
 
   const visible = useMemo(
-    () => applySort(applySearch(listings, search), prefs.sortOrder),
-    [listings, search, prefs.sortOrder],
+    () => applySort(applySearch(listings, search), prefs.sortOrder, viewCounts),
+    [listings, search, prefs.sortOrder, viewCounts],
   );
 
   return (
@@ -159,7 +191,11 @@ export function Browse() {
       {!loading && visible.length > 0 && prefs.viewMode === 'gallery' && (
         <div className="items-grid">
           {visible.map(listing => (
-            <ItemCard key={`${ccc.hexFrom(listing.outPoint.txHash)}:${listing.outPoint.index}`} listing={listing} />
+            <ItemCard
+              key={outpointId(listing.outPoint)}
+              listing={listing}
+              viewCount={viewCounts[outpointId(listing.outPoint)]}
+            />
           ))}
         </div>
       )}

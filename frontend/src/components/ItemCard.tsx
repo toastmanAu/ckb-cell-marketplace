@@ -8,9 +8,10 @@ import type { ListingInfo } from '../types';
 
 interface ItemCardProps {
   listing: ListingInfo;
+  viewCount?: number;
 }
 
-export function ItemCard({ listing }: ItemCardProps) {
+export function ItemCard({ listing, viewCount }: ItemCardProps) {
   const { marketItem, lsdlArgs, outPoint } = listing;
   const category = categoriseContent(marketItem.contentType);
   const outPointId = `${ccc.hexFrom(outPoint.txHash)}:${outPoint.index}`;
@@ -43,7 +44,15 @@ export function ItemCard({ listing }: ItemCardProps) {
             {(lsdlArgs.royaltyBps / 100).toFixed(1)}% royalty
           </div>
         )}
-        <div style={{ marginTop: '0.5rem', display: 'flex', justifyContent: 'flex-end' }}>
+        <div style={{ marginTop: '0.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          {viewCount !== undefined && viewCount > 0 ? (
+            <span
+              title={`${viewCount} ${viewCount === 1 ? 'view' : 'views'}`}
+              style={{ fontSize: '0.72rem', color: 'var(--muted)' }}
+            >
+              👁 {viewCount}
+            </span>
+          ) : <span />}
           <ReportButton
             outPoint={outPoint}
             creatorLockHash={ccc.hexFrom(lsdlArgs.creatorLockHash)}

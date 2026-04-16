@@ -1,0 +1,19 @@
+name = "cellswap-api"
+main = "src/index.ts"
+compatibility_date = "2026-04-15"
+
+# KV namespace stores per-outpoint view counts. Key = outpoint (tx:idx),
+# value = JSON { count: number, updatedAt: ISOstring }. Counts are
+# approximate — KV is eventually consistent, which is fine for view
+# analytics where slight undercounting at write-heavy moments is
+# acceptable and exact tallies are not meaningful.
+[[kv_namespaces]]
+binding = "VIEWS"
+id = "TODO_CREATE_VIA_WRANGLER_OR_DASHBOARD"
+
+# Routes: bind to cellswap.xyz/api/* once DNS is on CF. Until then the
+# worker lives at cellswap-api.<account>.workers.dev and the frontend
+# points at that origin via VITE_API_BASE env.
+# [[routes]]
+# pattern = "cellswap.xyz/api/*"
+# zone_name = "cellswap.xyz"

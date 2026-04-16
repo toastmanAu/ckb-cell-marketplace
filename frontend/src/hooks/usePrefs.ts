@@ -7,7 +7,14 @@ import { useCallback, useEffect, useState } from 'react';
 // bodies swap to async registry calls while the hook's signature stays the
 // same. Browse and any other consumer need no change.
 
-export type SortOrder = 'newest' | 'oldest' | 'az' | 'za' | 'price-low' | 'price-high';
+export type SortOrder =
+  | 'newest'
+  | 'oldest'
+  | 'az'
+  | 'za'
+  | 'price-low'
+  | 'price-high'
+  | 'most-viewed';
 export type ViewMode = 'gallery' | 'list';
 
 export interface UserPrefs {
