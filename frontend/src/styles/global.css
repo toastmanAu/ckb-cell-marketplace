@@ -61,6 +61,14 @@ code, .mono {
   text-decoration: none;
 }
 
+.logo { gap: 0; }
+
+.logo-stacked {
+  display: block;
+  height: 48px;
+  width: auto;
+}
+
 .logo:hover { text-decoration: none; }
 
 .nav-tabs {

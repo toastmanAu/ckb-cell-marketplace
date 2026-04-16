@@ -31,7 +31,11 @@ export function Layout() {
       <header className="header">
         <div className="header-inner">
           <NavLink to="/browse" className="logo">
-            CellSwap
+            <img
+              src="/brand/cellswap-logo.svg"
+              alt="CellSwap"
+              className="logo-stacked"
+            />
           </NavLink>
 
           <nav className="nav-tabs nav-tabs-desktop">

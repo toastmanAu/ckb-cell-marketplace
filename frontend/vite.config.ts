@@ -15,6 +15,9 @@ export default defineConfig({
   define: {
     __BUILD_ID__: JSON.stringify(BUILD_ID),
   },
+  server: {
+    host: true,
+  },
   build: {
     target: 'es2020',
     rollupOptions: {
