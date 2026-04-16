@@ -18,6 +18,8 @@ const MIME_OPTIONS = [
   'image/png',
   'image/jpeg',
   'image/webp',
+  'image/gif',
+  'application/pdf',
   'text/plain',
   'text/markdown',
   'text/html',
@@ -73,7 +75,11 @@ export function Mint() {
   const [processing, setProcessing] = useState(false);
 
   const isImage = isProcessableImage(contentType);
-  const useFileMode = contentType.startsWith('image/') || contentType === 'application/json' || contentType === 'text/markdown';
+  const useFileMode =
+    contentType.startsWith('image/') ||
+    contentType === 'application/pdf' ||
+    contentType === 'application/json' ||
+    contentType === 'text/markdown';
 
   // The final content to mint (processed if image, raw otherwise)
   const content = isImage && processedContent.length > 0 ? processedContent : rawContent;

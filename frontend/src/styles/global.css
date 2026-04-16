@@ -248,6 +248,7 @@ code, .mono {
 .badge-data  { background: rgba(139, 92, 246, 0.15); color: var(--purple); }
 .badge-html  { background: rgba(244, 63, 142, 0.15); color: var(--magenta); }
 .badge-markdown { background: rgba(0, 212, 255, 0.15); color: var(--accent); }
+.badge-pdf { background: rgba(200, 200, 200, 0.12); color: #c8c8c8; }
 
 .items-grid {
   display: grid;

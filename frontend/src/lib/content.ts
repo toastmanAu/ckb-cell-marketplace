@@ -3,6 +3,7 @@ import type { ContentCategory } from '../types';
 /** Categorise a MIME type for UI badge and rendering */
 export function categoriseContent(contentType: string): ContentCategory {
   if (contentType.startsWith('image/')) return 'image';
+  if (contentType === 'application/pdf') return 'pdf';
   if (contentType === 'text/html') return 'html';
   if (contentType === 'text/markdown') return 'markdown';
   if (contentType.startsWith('text/')) return 'text';
@@ -19,6 +20,7 @@ export function categoryLabel(contentType: string): string {
   const cat = categoriseContent(contentType);
   switch (cat) {
     case 'image': return contentType.replace('image/', '').toUpperCase();
+    case 'pdf': return 'PDF';
     case 'text': return 'TEXT';
     case 'html': return 'HTML';
     case 'markdown': return 'MD';

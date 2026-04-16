@@ -246,6 +246,44 @@ export function ContentRenderer({ item, mode }: ContentRendererProps) {
     return <MarkdownViewer markdown={md} />;
   }
 
+  if (category === 'pdf') {
+    if (isPreview) {
+      return (
+        <div style={{
+          background: 'var(--surface2)',
+          borderRadius: '8px',
+          padding: '1rem',
+          height: '180px',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '0.4rem',
+          color: 'var(--muted)',
+          fontFamily: "'JetBrains Mono', monospace",
+        }}>
+          <span style={{ fontSize: '1.8rem' }}>📄</span>
+          <span style={{ fontSize: '0.82rem' }}>PDF Document</span>
+          <span style={{ fontSize: '0.72rem' }}>{(item.content.length / 1024).toFixed(1)} KB</span>
+        </div>
+      );
+    }
+    const url = contentToDataUrl(item.content, item.contentType);
+    return (
+      <iframe
+        src={url}
+        title={item.description}
+        style={{
+          width: '100%',
+          height: '600px',
+          border: '1px solid var(--border)',
+          borderRadius: '8px',
+          background: '#fff',
+        }}
+      />
+    );
+  }
+
   if (category === 'html') {
     if (isPreview) {
       return (
@@ -270,6 +308,13 @@ export function ContentRenderer({ item, mode }: ContentRendererProps) {
       binary += String.fromCharCode(item.content[i]);
     }
     const dataUrl = `data:text/html;base64,${btoa(binary)}`;
+    // sandbox="allow-scripts" (no allow-same-origin) means scripts run in a
+    // null-origin context: they cannot read cellswap's cookies, localStorage,
+    // parent DOM, or call APIs authenticated as this origin. A malicious cell
+    // can render whatever it wants inside the frame but cannot exfiltrate or
+    // phish against cellswap itself. Trade-off is that relative URLs inside
+    // the HTML won't resolve, and the embedded script can't talk to any
+    // cellswap context — intended for self-contained static HTML only.
     return (
       <iframe
         src={dataUrl}
