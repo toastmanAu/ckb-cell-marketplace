@@ -3,3 +3,6 @@ build/
 *.swp
 deploy/*.json
 node_modules/
+
+# Claude session memory (do not commit)
+.remember/
