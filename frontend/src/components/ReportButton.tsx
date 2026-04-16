@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ccc } from '@ckb-ccc/connector-react';
 
-const REPORT_EMAIL = 'reports@cellswap.xyz';
+const REPORT_EMAIL = 'report@cellswap.xyz';
 
 const REASONS = [
   { value: 'csam', label: 'Child sexual abuse material' },
