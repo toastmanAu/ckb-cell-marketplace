@@ -9,7 +9,7 @@ import { ccc } from '@ckb-ccc/connector-react';
 
 const API_BASE =
   (import.meta.env.VITE_API_BASE as string | undefined) ??
-  'https://cellswap-api.toastmanau.workers.dev';
+  'https://cellswap-api.toastman-one.workers.dev';
 
 function outpointId(outPoint: ccc.OutPointLike): string {
   return `${ccc.hexFrom(outPoint.txHash)}:${Number(outPoint.index)}`;
