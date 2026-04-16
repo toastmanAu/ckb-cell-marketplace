@@ -59,12 +59,28 @@ function jsonResponse(body: unknown, status: number, origin: string | null): Res
 // keeps the KV namespace clean.
 const OUTPOINT_RE = /^0x[0-9a-fA-F]{64}:\d+$/;
 const viewKey = (outpoint: string) => `view:${outpoint.toLowerCase()}`;
+const rateKey = (ip: string, outpoint: string) => `rate:${ip}:${outpoint.toLowerCase()}`;
+
+// One view per outpoint per IP per hour. Uses a short-lived KV key that
+// expires after 3600s — no cleanup needed, CF garbage-collects expired
+// keys automatically. Cost: one extra KV read + conditional write per
+// view attempt, which stays well within free-tier quotas at cellswap
+// traffic levels.
+const RATE_LIMIT_SECONDS = 3600;
 
 async function handleView(request: Request, env: Env, origin: string | null): Promise<Response> {
   const body = (await request.json().catch(() => null)) as { outpoint?: unknown } | null;
   const outpoint = typeof body?.outpoint === 'string' ? body.outpoint : null;
   if (!outpoint || !OUTPOINT_RE.test(outpoint)) {
     return jsonResponse({ error: 'invalid outpoint' }, 400, origin);
+  }
+
+  const ip = request.headers.get('cf-connecting-ip') ?? 'unknown';
+  const rlKey = rateKey(ip, outpoint);
+  const alreadyCounted = await env.VIEWS.get(rlKey);
+  if (alreadyCounted) {
+    const existing = (await env.VIEWS.get<ViewRecord>(viewKey(outpoint), 'json')) ?? { count: 0, updatedAt: '' };
+    return jsonResponse({ count: existing.count, rateLimit: true }, 200, origin);
   }
 
   const key = viewKey(outpoint);
@@ -74,6 +90,7 @@ async function handleView(request: Request, env: Env, origin: string | null): Pr
     updatedAt: new Date().toISOString(),
   };
   await env.VIEWS.put(key, JSON.stringify(next));
+  await env.VIEWS.put(rlKey, '1', { expirationTtl: RATE_LIMIT_SECONDS });
 
   return jsonResponse({ count: next.count }, 200, origin);
 }

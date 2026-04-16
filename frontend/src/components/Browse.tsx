@@ -82,7 +82,13 @@ export function Browse() {
     signer.getRecommendedAddress().then(setAddress).catch(() => setAddress(null));
   }, [signer]);
 
-  const { prefs, setPref } = usePrefs(address);
+  const [userLock, setUserLock] = useState<ccc.Script | null>(null);
+  useEffect(() => {
+    if (!signer) { setUserLock(null); return; }
+    signer.getRecommendedAddressObj().then(a => setUserLock(a.script)).catch(() => setUserLock(null));
+  }, [signer]);
+
+  const { prefs, setPref, syncToChain, chainSyncState, chainSyncMessage } = usePrefs(address, signer, userLock);
   const [search, setSearch] = useState('');
   const [viewCounts, setViewCounts] = useState<Record<string, number>>({});
   const [visibleCount, setVisibleCount] = useState(24);
@@ -136,6 +142,17 @@ export function Browse() {
           <button className="btn btn-ghost" onClick={refresh} style={{ padding: '0.3rem 0.6rem', fontSize: '0.85rem' }}>
             Refresh
           </button>
+          {signer && (
+            <button
+              className="btn btn-ghost"
+              onClick={syncToChain}
+              disabled={chainSyncState === 'writing' || chainSyncState === 'reading'}
+              title={chainSyncMessage || 'Save sort/view preferences to your on-chain JIDSDR cell'}
+              style={{ padding: '0.3rem 0.6rem', fontSize: '0.78rem', opacity: chainSyncState === 'writing' ? 0.5 : 1 }}
+            >
+              {chainSyncState === 'writing' ? 'Syncing...' : chainSyncState === 'reading' ? 'Loading...' : 'Sync prefs'}
+            </button>
+          )}
         </div>
       </div>
 
