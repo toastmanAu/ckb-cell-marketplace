@@ -36,6 +36,24 @@ export function TxConfirmModal({ action, summary, userLock, extraInfo, onConfirm
           <div style={{ color: 'var(--muted)' }}>Signing wallet</div>
           <div><code className="mono">{ownerArgsShort}</code></div>
 
+          {summary.toUserLockedInCells > 0n && (
+            <>
+              <div style={{ color: 'var(--muted)' }} title="Capacity held in a new cell on your own lock. You own it, but it can only be recovered by destroying the cell (for MarketItems, via a future transfer or burn).">
+                Locked in new cell
+              </div>
+              <div>{shannonsToCkb(summary.toUserLockedInCells)} CKB</div>
+            </>
+          )}
+
+          {summary.toLsdlEscrow > 0n && (
+            <>
+              <div style={{ color: 'var(--muted)' }} title="Capacity held in the marketplace escrow (LSDL lock). Recoverable by you via Cancel, or paid out to the buyer on a successful sale.">
+                Locked in listing (escrow)
+              </div>
+              <div>{shannonsToCkb(summary.toLsdlEscrow)} CKB</div>
+            </>
+          )}
+
           {summary.toOthers > 0n && (
             <>
               <div style={{ color: 'var(--muted)' }}>Paid to others</div>
@@ -53,11 +71,15 @@ export function TxConfirmModal({ action, summary, userLock, extraInfo, onConfirm
           <div style={{ color: 'var(--muted)' }}>Protocol fee</div>
           <div>{shannonsToCkb(summary.fee)} CKB</div>
 
-          <div style={{ color: 'var(--muted)' }}>Change back to you</div>
-          <div>{shannonsToCkb(summary.toUser)} CKB</div>
+          <div style={{ color: 'var(--muted)' }}>Spendable change</div>
+          <div>{shannonsToCkb(summary.toUserChange)} CKB</div>
 
-          <div style={{ color: 'var(--muted)', borderTop: '1px solid var(--border)', paddingTop: '0.45rem' }}>Net out of wallet</div>
-          <div style={{ fontWeight: 600, borderTop: '1px solid var(--border)', paddingTop: '0.45rem' }}>{shannonsToCkb(summary.netOut)} CKB</div>
+          <div style={{ color: 'var(--muted)', borderTop: '1px solid var(--border)', paddingTop: '0.45rem' }} title="Inputs minus capacity returning to your freely-spendable change. This is the real reduction in the CKB you can spend without first destroying or unlocking a cell.">
+            Spendable CKB reduced by
+          </div>
+          <div style={{ fontWeight: 600, borderTop: '1px solid var(--border)', paddingTop: '0.45rem' }}>
+            {shannonsToCkb(summary.inputsTotal - summary.toUserChange)} CKB
+          </div>
 
           <div style={{ color: 'var(--muted)' }}>Inputs / Outputs</div>
           <div>{summary.inputCount} / {summary.outputCount}</div>
@@ -73,6 +95,12 @@ export function TxConfirmModal({ action, summary, userLock, extraInfo, onConfirm
         {summary.toDeadLock > 0n && (
           <div style={{ fontSize: '0.8rem', color: 'var(--warning, #a86a00)', marginBottom: '1rem', lineHeight: 1.4 }}>
             ⚠ Immutable mint: the CKB marked "Locked permanently" can never be recovered. The cell stays on chain forever.
+          </div>
+        )}
+
+        {summary.toUserLockedInCells > 0n && summary.toDeadLock === 0n && (
+          <div style={{ fontSize: '0.78rem', color: 'var(--muted)', marginBottom: '1rem', lineHeight: 1.4 }}>
+            "Locked in new cell" capacity is still on your lock — you own it, but it's tied up in a typed cell and not freely spendable until the cell is destroyed or unlocked.
           </div>
         )}
 
