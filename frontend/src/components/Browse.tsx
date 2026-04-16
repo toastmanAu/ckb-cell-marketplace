@@ -229,7 +229,12 @@ export function Browse() {
                         : listing.marketItem.description}
                     </span>
                   </div>
-                  <span className="price">{shannonsToCkb(listing.lsdlArgs.totalValue)} CKB</span>
+                  <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>
+                      👁 {viewCounts[outpointId(listing.outPoint)] ?? '·'}
+                    </span>
+                    <span className="price">{shannonsToCkb(listing.lsdlArgs.totalValue)} CKB</span>
+                  </div>
                 </div>
               </Link>
             );

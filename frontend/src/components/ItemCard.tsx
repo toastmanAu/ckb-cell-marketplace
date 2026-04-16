@@ -45,14 +45,12 @@ export function ItemCard({ listing, viewCount }: ItemCardProps) {
           </div>
         )}
         <div style={{ marginTop: '0.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          {viewCount !== undefined && viewCount > 0 ? (
-            <span
-              title={`${viewCount} ${viewCount === 1 ? 'view' : 'views'}`}
-              style={{ fontSize: '0.72rem', color: 'var(--muted)' }}
-            >
-              👁 {viewCount}
-            </span>
-          ) : <span />}
+          <span
+            title={viewCount !== undefined ? `${viewCount} ${viewCount === 1 ? 'view' : 'views'}` : 'Views loading...'}
+            style={{ fontSize: '0.78rem', color: viewCount ? 'var(--accent)' : 'var(--muted)' }}
+          >
+            👁 {viewCount ?? '·'}
+          </span>
           <ReportButton
             outPoint={outPoint}
             creatorLockHash={ccc.hexFrom(lsdlArgs.creatorLockHash)}
