@@ -9,7 +9,7 @@ import { summarizeTx, type TxSummary } from '../lib/tx-summary';
 import { createClient } from '../lib/indexer';
 import { TxConfirmModal } from './TxConfirmModal';
 import { processImage, isProcessableImage, formatBytes, type ImageProcessOptions } from '../lib/image';
-import { publishToCkbfs, estimateCkbfsCost } from '../lib/ckbfs';
+import { publishToCkbfs, estimateCkbfsCost, MAX_SINGLE_TX_CKBFS_BYTES } from '../lib/ckbfs';
 import { isWalletBlocked, getBlockedWalletReason } from '../moderation';
 import type { TxState, MarketItem } from '../types';
 
@@ -144,7 +144,8 @@ export function Mint() {
     ? { contentType: finalMime, description: description || '(no description)', content }
     : null;
 
-  const canMint = signer && content.length > 0 && description.trim().length > 0 && finalMime.length > 0 && !processing && !walletBlocked;
+  const ckbfsTooLarge = storageMode === 'ckbfs' && content.length > MAX_SINGLE_TX_CKBFS_BYTES;
+  const canMint = signer && content.length > 0 && description.trim().length > 0 && finalMime.length > 0 && !processing && !walletBlocked && !ckbfsTooLarge;
 
   // Inline cost estimate
   const inlineCostCkb = Math.ceil(content.length * 2.2 / 100) + 300;
@@ -421,6 +422,22 @@ export function Mint() {
                   <div>Data: {formatBytes(content.length)} stored in witnesses (prunable)</div>
                   <div>Index cell: <span className="price">~{ckbfsCost.indexCellCkb} CKB</span> (locked)</div>
                   <div style={{ color: 'var(--green)', marginTop: '0.3rem' }}>{ckbfsCost.note}</div>
+                  {ckbfsTooLarge && (
+                    <div style={{
+                      marginTop: '0.75rem',
+                      padding: '0.6rem 0.75rem',
+                      background: 'rgba(255, 69, 96, 0.08)',
+                      border: '1px solid rgba(255, 69, 96, 0.25)',
+                      borderRadius: '6px',
+                      color: 'var(--red)',
+                      lineHeight: 1.5,
+                    }}>
+                      <strong>File too large for single-transaction publish.</strong>
+                      <div style={{ marginTop: '0.25rem' }}>
+                        Current max: {formatBytes(MAX_SINGLE_TX_CKBFS_BYTES)} per mint. Multi-transaction CKBFS append is on the roadmap — for now, please use a smaller file.
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

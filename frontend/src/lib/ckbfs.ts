@@ -10,6 +10,12 @@ import { ccc } from '@ckb-ccc/connector-react';
 const CKBFS_V3_CODE_HASH = '0xb5d13ffe0547c78021c01fe24dce2e959a1ed8edbca3cb93dd2e9f57fb56d695';
 const CKBFS_V3_DEP_GROUP_TX = '0x47cfa8d554cccffe7796f93b58437269de1f98f029d0a52b6b146381f3e95e61';
 
+// CKB block size caps single-tx serialization at ~597 KB. The current publish
+// flow packs ALL content into one tx's witnesses, so content is bounded by the
+// block limit minus tx/witness overhead. Multi-tx append (publish → appendV3 →
+// appendV3 → ...) will lift this — tracked in docs/CKBFS-MULTI-TX-TODO.md.
+export const MAX_SINGLE_TX_CKBFS_BYTES = 500_000;
+
 /** Chunk content into ~500KB pieces for CKBFS V3 witness storage */
 function chunkContent(data: Uint8Array, chunkSize = 500_000): Uint8Array[] {
   const chunks: Uint8Array[] = [];
@@ -40,6 +46,12 @@ export async function publishToCkbfs(
   contentType: string,
   filename: string,
 ): Promise<CkbfsPublishResult> {
+  if (content.length > MAX_SINGLE_TX_CKBFS_BYTES) {
+    throw new Error(
+      `File too large for single-transaction CKBFS publish (${content.length} bytes, max ${MAX_SINGLE_TX_CKBFS_BYTES}). ` +
+      `Multi-transaction append is not yet supported — tracked in docs/CKBFS-MULTI-TX-TODO.md.`,
+    );
+  }
   const addressObj = await signer.getRecommendedAddressObj();
   const lock = addressObj.script;
   const chunks = chunkContent(content);
